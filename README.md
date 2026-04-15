@@ -121,6 +121,21 @@ echo "" >> CLAUDE.md
 curl https://raw.githubusercontent.com/forrestchang/andrej-karpathy-skills/main/CLAUDE.md >> CLAUDE.md
 ```
 
+**Option C: OpenCode AGENTS.md (global)**
+
+OpenCode reads global instructions from `~/.config/opencode/AGENTS.md`.
+
+New global config:
+```bash
+curl --create-dirs -o ~/.config/opencode/AGENTS.md https://raw.githubusercontent.com/forrestchang/andrej-karpathy-skills/main/CLAUDE.md
+```
+
+Existing global config (append):
+```bash
+echo "" >> ~/.config/opencode/AGENTS.md
+curl https://raw.githubusercontent.com/forrestchang/andrej-karpathy-skills/main/CLAUDE.md >> ~/.config/opencode/AGENTS.md
+```
+
 ## Key Insight
 
 From Andrej:
