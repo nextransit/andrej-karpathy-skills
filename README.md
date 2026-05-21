@@ -8,6 +8,18 @@ A single `CLAUDE.md` file to improve Claude Code behavior, derived from [Andrej 
 
 English | [简体中文](./README.zh.md)
 
+## Table of Contents
+- [The Problems](#the-problems)
+- [The Solution](#the-solution)
+- [The Four Principles in Detail](#the-four-principles-in-detail)
+  - [1. Think Before Coding](#1-think-before-coding)
+  - [2. Simplicity First](#2-simplicity-first)
+  - [3. Surgical Changes](#3-surgical-changes)
+  - [4. Goal-Driven Execution](#4-goal-driven-execution)
+- [Install](#install)
+- [Using with Cursor](#using-with-cursor)
+- [Key Insight](#key-insight)
+
 ## The Problems
 
 From Andrej's post:
