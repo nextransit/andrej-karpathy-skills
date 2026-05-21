@@ -1,0 +1,16 @@
+name: content-sync-check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  sync-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run sync check
+        run: bash scripts/sync-check.sh
