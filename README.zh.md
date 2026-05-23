@@ -1,12 +1,16 @@
-# 受 Karpathy 启发的 Claude Code 指南
+<p align="right">
+  <a href="./README.md">English</a> | 简体中文
+</p>
 
-> 查看我的新项目 [Multica](https://github.com/multica-ai/multica) —— 一个用于运行和管理编码智能体的开源平台，支持可复用的技能。
->
-> 在 X 上关注我：[https://x.com/jiayuan_jy](https://x.com/jiayuan_jy)
+<h1 align="center">Karpathy Guidelines for OpenCode</h1>
 
-一个单一的 `CLAUDE.md` 文件，用于改善 Claude Code 的行为，源自 [Andrej Karpathy 的观察](https://x.com/karpathy/status/2015883857489522876) 关于 LLM 编码陷阱的总结。
+<p align="center">
+  一份受 Andrej Karpathy 启发编写的 AI 编程助手行为规范，打包为 OpenCode 技能。
+</p>
 
-[English](./README.md) | 简体中文
+<p align="center">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg">
+</p>
 
 ## 问题所在
 
@@ -29,128 +33,89 @@
 | **精准修改** | 无关编辑、触碰不应碰的代码 |
 | **目标驱动执行** | 通过测试优先、可验证的成功标准 |
 
-## 四个原则详解
-
-### 1. 编码前思考
-
-**不要假设。不要隐藏困惑。呈现权衡。**
-
-LLM 经常默默选择一种解释然后执行。这个原则强制明确推理：
-
-- **明确说明假设** — 如果不确定，询问而不是猜测
-- **呈现多种解释** — 当存在歧义时，不要默默选择
-- **适时提出异议** — 如果存在更简单的方法，说出来
-- **困惑时停下来** — 指出不清楚的地方并要求澄清
-
-### 2. 简洁优先
-
-**用最少的代码解决问题。不要过度推测。**
-
-对抗过度工程的倾向：
-
-- 不要添加要求之外的功能
-- 不要为一次性代码创建抽象
-- 不要添加未要求的"灵活性"或"可配置性"
-- 不要为不可能发生的场景做错误处理
-- 如果 200 行代码可以写成 50 行，重写它
-
-**检验标准：** 资深工程师会觉得这过于复杂吗？如果是，简化。
-
-### 3. 精准修改
-
-**只碰必须碰的。只清理自己造成的混乱。**
-
-编辑现有代码时：
-
-- 不要"改进"相邻的代码、注释或格式
-- 不要重构没坏的东西
-- 匹配现有风格，即使你更倾向于不同的写法
-- 如果注意到无关的死代码，提一下 —— 不要删除它
-
-当你的改动产生孤儿代码时：
-
-- 删除因你的改动而变得无用的导入/变量/函数
-- 不要删除预先存在的死代码，除非被要求
-
-**检验标准：** 每一行修改都应该能直接追溯到用户的请求。
-
-### 4. 目标驱动执行
-
-**定义成功标准。循环验证直到达成。**
-
-将指令式任务转化为可验证的目标：
-
-| 不要这样做... | 转化为... |
-|--------------|-----------------|
-| "添加验证" | "为无效输入编写测试，然后让它们通过" |
-| "修复 bug" | "编写重现 bug 的测试，然后让它通过" |
-| "重构 X" | "确保重构前后测试都能通过" |
-
-对于多步骤任务，说明一个简短的计划：
-
-```
-1. [步骤] → 验证: [检查]
-2. [步骤] → 验证: [检查]
-3. [步骤] → 验证: [检查]
-```
-
-强有力的成功标准让 LLM 能够独立循环执行。弱标准（"让它工作"）需要不断澄清。
-
 ## 安装
 
-**选项 A：Claude Code 插件（推荐）**
+安装分两个层次。**全局安装**让指南在每个项目中生效。**项目安装**将指南限定在单个仓库中。可以两者都做，让全局指南生效的同时在特定项目中覆盖。
 
-在 Claude Code 中，首先添加插件市场：
-```
-/plugin marketplace add forrestchang/andrej-karpathy-skills
-```
+### 全局安装
 
-然后安装插件：
-```
-/plugin install andrej-karpathy-skills@karpathy-skills
-```
+OpenCode 会自动从以下两个位置发现技能，任选其一：
 
-这会将指南安装为 Claude Code 插件，使其在你所有项目中可用。
-
-**选项 B：CLAUDE.md（按项目）**
-
-新项目：
+**方式 A — 全局技能目录（推荐）：**
 ```bash
-curl -o CLAUDE.md https://raw.githubusercontent.com/forrestchang/andrej-karpathy-skills/main/CLAUDE.md
+mkdir -p ~/.config/opencode/skills/karpathy-guidelines
+curl -o ~/.config/opencode/skills/karpathy-guidelines/SKILL.md \
+  https://raw.githubusercontent.com/chius-me/andrej-karpathy-skills-opencode/main/.opencode/skills/karpathy-guidelines/SKILL.md
 ```
 
-已有项目（追加）：
+**方式 B — Agent 技能目录（自动发现的外部技能）：**
 ```bash
-echo "" >> CLAUDE.md
-curl https://raw.githubusercontent.com/forrestchang/andrej-karpathy-skills/main/CLAUDE.md >> CLAUDE.md
+mkdir -p ~/.agents/skills/karpathy-guidelines
+curl -o ~/.agents/skills/karpathy-guidelines/SKILL.md \
+  https://raw.githubusercontent.com/chius-me/andrej-karpathy-skills-opencode/main/.opencode/skills/karpathy-guidelines/SKILL.md
 ```
 
-## 在 Cursor 中使用
+如果想在每个项目中默认加载指南作为系统指令，在 `~/.config/opencode/opencode.json` 中添加：
 
-本仓库包含一个已提交的 Cursor 项目规则 ([`.cursor/rules/karpathy-guidelines.mdc`](.cursor/rules/karpathy-guidelines.mdc))，因此在 Cursor 中打开项目时同样适用这些指南。详情请参见 **[CURSOR.md](CURSOR.md)**，包括如何在其他项目中使用该规则，以及它与 Claude Code 的关系。
+```json
+{
+  "instructions": ["~/AGENTS.md"]
+}
+```
 
-## 核心洞察
+然后复制指令文件：
 
-来自 Andrej：
+```bash
+curl -o ~/AGENTS.md \
+  https://raw.githubusercontent.com/chius-me/andrej-karpathy-skills-opencode/main/AGENTS.md
+```
 
-> "LLM 非常擅长循环执行直到达成特定目标……不要告诉它该做什么，给它成功标准，然后看着它完成。"
+### 项目安装
 
-"目标驱动执行"原则正是捕捉了这一点：将指令式指令转化为带有验证循环的声明式目标。
+每个新项目需要两个文件。技能文件让指南作为可加载的技能可用。指令文件让它们默认生效。
+
+```bash
+cd your-project
+
+# 1. 安装技能（OpenCode 自动发现）
+mkdir -p .opencode/skills/karpathy-guidelines
+curl -o .opencode/skills/karpathy-guidelines/SKILL.md \
+  https://raw.githubusercontent.com/chius-me/andrej-karpathy-skills-opencode/main/.opencode/skills/karpathy-guidelines/SKILL.md
+
+# 2. 安装指令（OpenCode 从项目根目录自动加载）
+curl -o AGENTS.md \
+  https://raw.githubusercontent.com/chius-me/andrej-karpathy-skills-opencode/main/AGENTS.md
+```
+
+如果你的项目已有 `AGENTS.md`，或更倾向于使用 `opencode.json`，可显式配置指令路径：
+
+```json
+{
+  "instructions": ["AGENTS.md"]
+}
+```
+
+### 验证安装
+
+OpenCode 启动时会输出类似以下日志：
+
+```
+Loaded skill: karpathy-guidelines
+Loaded instructions from AGENTS.md
+```
 
 ## 如何判断它在起作用
 
 如果你看到以下情况，说明这些指南正在发挥作用：
 
-- **diff 中不必要的改动更少** —— 只有请求的改动出现
-- **因过度复杂而导致的重写更少** —— 代码第一次就写得简洁
-- **澄清问题在实现之前提出** —— 而不是在犯错之后
-- **干净、精简的 PR** —— 没有顺带的重构或"改进"
+- **diff 中不必要的改动更少** — 只有请求的改动出现
+- **因过度复杂而导致的重写更少** — 代码第一次就写得简洁
+- **澄清问题在实现之前提出** — 而不是在犯错之后
+- **干净、精简的 PR** — 没有顺带的重构或"改进"
 
 ## 定制
 
-这些指南设计用于与项目特定指令合并。将它们添加到你现有的 `CLAUDE.md` 或创建一个新的。
-
-对于项目特定规则，添加如下章节：
+编辑 `AGENTS.md` 或在项目的 `opencode.json` 中添加规则，与项目特定指令合并：
 
 ```markdown
 ## 项目特定指南
@@ -162,10 +127,6 @@ curl https://raw.githubusercontent.com/forrestchang/andrej-karpathy-skills/main/
 
 ## 权衡说明
 
-这些指南倾向于**谨慎而非速度**。对于琐碎的任务（简单的拼写错误修复、显而易见的一行修改），请自行判断 —— 并非每个改动都需要完整的严谨流程。
+这些指南倾向于**谨慎而非速度**。对于琐碎的任务（简单的拼写错误修复、显而易见的一行修改），请自行判断 — 并非每个改动都需要完整的严谨流程。
 
 目标是减少非琐碎工作中的代价高昂的错误，而不是拖慢简单任务。
-
-## 许可
-
-MIT
