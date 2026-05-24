@@ -4,7 +4,13 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - vscode_extension
+      - vscode-extension
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-vsix:

@@ -1,0 +1,97 @@
+name: Publish Extension
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Marketplace target
+        required: true
+        default: both
+        type: choice
+        options:
+          - vscode
+          - openvsx
+          - both
+      dry_run:
+        description: Build and verify without publishing
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: vscode-extension
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile extension
+        run: npm run compile
+
+      - name: Package VSIX
+        run: npm run package
+
+      - name: Locate VSIX
+        id: vsix
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="$(ls -1 *.vsix | head -n 1)"
+          echo "path=$file" >> "$GITHUB_OUTPUT"
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: karpathy-guidelines-vsix
+          path: vscode-extension/${{ steps.vsix.outputs.path }}
+          if-no-files-found: error
+
+      - name: Dry run summary
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "Dry run enabled. Built ${{ steps.vsix.outputs.path }} and skipped publish."
+
+      - name: Validate VSCE_PAT
+        if: ${{ !inputs.dry_run && (inputs.target == 'vscode' || inputs.target == 'both') }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: test -n "$VSCE_PAT"
+
+      - name: Validate OVSX_PAT
+        if: ${{ !inputs.dry_run && (inputs.target == 'openvsx' || inputs.target == 'both') }}
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: test -n "$OVSX_PAT"
+
+      - name: Publish to VS Code Marketplace
+        if: ${{ !inputs.dry_run && (inputs.target == 'vscode' || inputs.target == 'both') }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish --packagePath "${{ steps.vsix.outputs.path }}" --pat "$VSCE_PAT" --skip-duplicate
+
+      - name: Publish to Open VSX
+        if: ${{ !inputs.dry_run && (inputs.target == 'openvsx' || inputs.target == 'both') }}
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: npx --yes ovsx --pat "$OVSX_PAT" publish "${{ steps.vsix.outputs.path }}" --skip-duplicate
