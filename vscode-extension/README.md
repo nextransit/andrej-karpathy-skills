@@ -61,7 +61,7 @@ code --extensionDevelopmentPath=$(pwd)
 cd vscode-extension
 npm install
 npm run package
-code --install-extension karpathy-guidelines-1.1.1.vsix
+code --install-extension karpathy-guidelines-1.1.2.vsix
 ```
 
 ## Configuration
