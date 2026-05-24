@@ -21,8 +21,11 @@ export interface ToolConfig {
   primaryPaths: string[];
   globalPaths?: string[];
   detectMarkers: string[];
-  buildFiles: () => GeneratedFileSpec[];
+  buildFiles: (lang: Language) => GeneratedFileSpec[];
 }
+
+export type Language = 'en' | 'zh-CN';
+export type LanguageOption = 'auto' | 'en' | 'zh-CN';
 
 export interface ConfigGenerationOptions {
   overwriteExisting: boolean;

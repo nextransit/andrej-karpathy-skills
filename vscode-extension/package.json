@@ -182,6 +182,12 @@
           "type": "boolean",
           "default": false,
           "description": "Overwrite existing config files without prompting"
+        },
+        "karpathyGuidelines.language": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "en", "zh-CN"],
+          "description": "Language for generated configs: auto (system), en (English), zh-CN (Chinese)"
         }
       }
     }

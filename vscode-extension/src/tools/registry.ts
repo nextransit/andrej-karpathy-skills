@@ -13,13 +13,13 @@ import {
   buildOpenCodeContent,
   buildWindsurfRuleContent,
 } from '../guidelines';
-import { GeneratedFileSpec, ToolConfig } from './types';
+import { GeneratedFileSpec, Language, ToolConfig } from './types';
 
-function sharedAgentsFile(): GeneratedFileSpec {
+function sharedAgentsFile(lang: Language): GeneratedFileSpec {
   return {
     relativePath: 'AGENTS.md',
-    description: 'Shared source of truth for compatible AI coding agents',
-    content: buildAgentsContent(),
+    description: lang === 'zh-CN' ? '兼容 AI 编码代理的共享事实来源' : 'Shared source of truth for compatible AI coding agents',
+    content: buildAgentsContent(lang),
   };
 }
 
@@ -33,12 +33,12 @@ export const TOOLS: Record<string, ToolConfig> = {
     primaryPaths: ['CLAUDE.md'],
     globalPaths: ['~/.claude/CLAUDE.md'],
     detectMarkers: ['CLAUDE.md', '.claude', '.claude-plugin'],
-    buildFiles: () => [
-      sharedAgentsFile(),
+    buildFiles: (lang: Language) => [
+      sharedAgentsFile(lang),
       {
         relativePath: 'CLAUDE.md',
-        description: 'Claude Code project memory entrypoint',
-        content: buildClaudeContent(),
+        description: lang === 'zh-CN' ? 'Claude Code 项目记忆入口' : 'Claude Code project memory entrypoint',
+        content: buildClaudeContent(lang),
       },
     ],
   },
@@ -51,7 +51,7 @@ export const TOOLS: Record<string, ToolConfig> = {
     primaryPaths: ['AGENTS.md'],
     globalPaths: ['~/.codex/AGENTS.md'],
     detectMarkers: ['AGENTS.md', '.codex'],
-    buildFiles: () => [sharedAgentsFile()],
+    buildFiles: (lang: Language) => [sharedAgentsFile(lang)],
   },
   'gemini-cli': {
     id: 'gemini-cli',
@@ -62,16 +62,16 @@ export const TOOLS: Record<string, ToolConfig> = {
     primaryPaths: ['GEMINI.md', '.gemini/settings.json'],
     globalPaths: ['~/.gemini/settings.json'],
     detectMarkers: ['GEMINI.md', '.gemini', '.gemini/settings.json'],
-    buildFiles: () => [
-      sharedAgentsFile(),
+    buildFiles: (lang: Language) => [
+      sharedAgentsFile(lang),
       {
         relativePath: 'GEMINI.md',
-        description: 'Gemini CLI project context entrypoint',
-        content: buildGeminiContent(),
+        description: lang === 'zh-CN' ? 'Gemini CLI 项目上下文入口' : 'Gemini CLI project context entrypoint',
+        content: buildGeminiContent(lang),
       },
       {
         relativePath: '.gemini/settings.json',
-        description: 'Gemini CLI configuration for shared context file names',
+        description: lang === 'zh-CN' ? 'Gemini CLI 共享上下文文件名的配置' : 'Gemini CLI configuration for shared context file names',
         content: buildGeminiSettingsContent(),
       },
     ],
@@ -85,12 +85,12 @@ export const TOOLS: Record<string, ToolConfig> = {
     primaryPaths: ['AGENTS.md'],
     globalPaths: ['~/.config/opencode/config.json'],
     detectMarkers: ['.opencode.json', 'opencode.config.json'],
-    buildFiles: () => [
-      sharedAgentsFile(),
+    buildFiles: (lang: Language) => [
+      sharedAgentsFile(lang),
       {
         relativePath: '.opencode.json',
-        description: 'OpenCode workspace configuration',
-        content: buildOpenCodeContent(),
+        description: lang === 'zh-CN' ? 'OpenCode 工作区配置' : 'OpenCode workspace configuration',
+        content: buildOpenCodeContent(lang),
       },
     ],
   },
@@ -103,11 +103,11 @@ export const TOOLS: Record<string, ToolConfig> = {
     primaryPaths: ['.aider.conf.yml'],
     globalPaths: ['~/.aider.conf.yml'],
     detectMarkers: ['.aider.conf.yml', '.aider.conf.yaml', '.aider.conf'],
-    buildFiles: () => [
-      sharedAgentsFile(),
+    buildFiles: (lang: Language) => [
+      sharedAgentsFile(lang),
       {
         relativePath: '.aider.conf.yml',
-        description: 'Aider config that auto-loads AGENTS.md',
+        description: lang === 'zh-CN' ? 'Aider 自动加载 AGENTS.md 的配置' : 'Aider config that auto-loads AGENTS.md',
         content: buildAiderConfigContent(),
       },
     ],
@@ -121,12 +121,12 @@ export const TOOLS: Record<string, ToolConfig> = {
     primaryPaths: ['.cursor/rules/karpathy-guidelines.mdc'],
     globalPaths: ['~/.cursor/rules/karpathy-guidelines.mdc'],
     detectMarkers: ['.cursor', '.cursor/rules'],
-    buildFiles: () => [
-      sharedAgentsFile(),
+    buildFiles: (lang: Language) => [
+      sharedAgentsFile(lang),
       {
         relativePath: '.cursor/rules/karpathy-guidelines.mdc',
-        description: 'Cursor project rule',
-        content: buildCursorRuleContent(),
+        description: lang === 'zh-CN' ? 'Cursor 项目规则' : 'Cursor project rule',
+        content: buildCursorRuleContent(lang),
       },
     ],
   },
@@ -139,12 +139,12 @@ export const TOOLS: Record<string, ToolConfig> = {
     primaryPaths: ['.windsurf/rules/karpathy-guidelines.md'],
     globalPaths: ['~/.windsurf/rules/karpathy-guidelines.md'],
     detectMarkers: ['.windsurf', '.windsurf/rules'],
-    buildFiles: () => [
-      sharedAgentsFile(),
+    buildFiles: (lang: Language) => [
+      sharedAgentsFile(lang),
       {
         relativePath: '.windsurf/rules/karpathy-guidelines.md',
-        description: 'Windsurf rule file',
-        content: buildWindsurfRuleContent(),
+        description: lang === 'zh-CN' ? 'Windsurf 规则文件' : 'Windsurf rule file',
+        content: buildWindsurfRuleContent(lang),
       },
     ],
   },
@@ -159,17 +159,17 @@ export const TOOLS: Record<string, ToolConfig> = {
       '.github/instructions/karpathy-guidelines.instructions.md',
     ],
     detectMarkers: ['.github/copilot-instructions.md', '.github/instructions', '.github'],
-    buildFiles: () => [
-      sharedAgentsFile(),
+    buildFiles: (lang: Language) => [
+      sharedAgentsFile(lang),
       {
         relativePath: '.github/copilot-instructions.md',
-        description: 'Repository-wide Copilot instructions',
-        content: buildCopilotInstructionsContent(),
+        description: lang === 'zh-CN' ? '仓库级 Copilot 指令' : 'Repository-wide Copilot instructions',
+        content: buildCopilotInstructionsContent(lang),
       },
       {
         relativePath: '.github/instructions/karpathy-guidelines.instructions.md',
-        description: 'Path-level Copilot instructions',
-        content: buildCopilotPathInstructionsContent(),
+        description: lang === 'zh-CN' ? '路径级 Copilot 指令' : 'Path-level Copilot instructions',
+        content: buildCopilotPathInstructionsContent(lang),
       },
     ],
   },
@@ -182,12 +182,12 @@ export const TOOLS: Record<string, ToolConfig> = {
     primaryPaths: ['.copilot/instructions.md'],
     globalPaths: ['~/.copilot/instructions.md'],
     detectMarkers: ['.copilot'],
-    buildFiles: () => [
-      sharedAgentsFile(),
+    buildFiles: (lang: Language) => [
+      sharedAgentsFile(lang),
       {
         relativePath: '.copilot/instructions.md',
-        description: 'Custom instructions for Copilot CLI',
-        content: buildCopilotCliInstructionsContent(),
+        description: lang === 'zh-CN' ? 'Copilot CLI 自定义指令' : 'Custom instructions for Copilot CLI',
+        content: buildCopilotCliInstructionsContent(lang),
       },
     ],
   },
@@ -200,12 +200,12 @@ export const TOOLS: Record<string, ToolConfig> = {
     primaryPaths: ['.clinerules/karpathy-guidelines.md'],
     globalPaths: ['~/.clinerules'],
     detectMarkers: ['.clinerules', '.clinerules/karpathy-guidelines.md'],
-    buildFiles: () => [
-      sharedAgentsFile(),
+    buildFiles: (lang: Language) => [
+      sharedAgentsFile(lang),
       {
         relativePath: '.clinerules/karpathy-guidelines.md',
-        description: 'Cline rule file',
-        content: buildClineRuleContent(),
+        description: lang === 'zh-CN' ? 'Cline 规则文件' : 'Cline rule file',
+        content: buildClineRuleContent(lang),
       },
     ],
   },
@@ -218,12 +218,12 @@ export const TOOLS: Record<string, ToolConfig> = {
     primaryPaths: ['.continue/rules/karpathy-guidelines.md'],
     globalPaths: ['~/.continue/rules/karpathy-guidelines.md'],
     detectMarkers: ['.continue/rules', '.continue/config.yaml', '.continue/config.json'],
-    buildFiles: () => [
-      sharedAgentsFile(),
+    buildFiles: (lang: Language) => [
+      sharedAgentsFile(lang),
       {
         relativePath: '.continue/rules/karpathy-guidelines.md',
-        description: 'Continue local rule file',
-        content: buildContinueRuleContent(),
+        description: lang === 'zh-CN' ? 'Continue 本地规则文件' : 'Continue local rule file',
+        content: buildContinueRuleContent(lang),
       },
     ],
   },

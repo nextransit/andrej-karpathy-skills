@@ -6,6 +6,8 @@ import {
   GeneratedFileResult,
   GeneratedFileSpec,
   GenerationReport,
+  Language,
+  LanguageOption,
   ToolConfig,
   ToolGenerationResult,
   WorkspaceToolStatus,
@@ -28,7 +30,7 @@ async function pathExists(targetPath: string): Promise<boolean> {
   }
 }
 
-function dedupeFiles(toolIds: string[]): Map<string, GeneratedFileSpec> {
+function dedupeFiles(toolIds: string[], lang: Language): Map<string, GeneratedFileSpec> {
   const files = new Map<string, GeneratedFileSpec>();
 
   for (const toolId of toolIds) {
@@ -37,7 +39,7 @@ function dedupeFiles(toolIds: string[]): Map<string, GeneratedFileSpec> {
       continue;
     }
 
-    for (const file of tool.buildFiles()) {
+    for (const file of tool.buildFiles(lang)) {
       const existing = files.get(file.relativePath);
       if (existing && existing.content !== file.content) {
         throw new Error(`Conflicting generated content for ${file.relativePath}`);
