@@ -1,9 +1,9 @@
 {
-  "name": "@anthropicai/vscode-karpathy-guidelines",
-  "displayName": "Karpathy Guidelines (Anthropic)",
-  "description": "Apply Andrej Karpathy's behavioral guidelines to reduce common LLM coding mistakes",
-  "version": "1.0.0",
-  "publisher": "decard",
+  "name": "karpathy-guidelines",
+  "displayName": "Karpathy Guidelines",
+  "description": "Apply Andrej Karpathy's behavioral guidelines across Claude Code, Codex, Gemini CLI, Cursor, Windsurf, Copilot, Cline, Continue, and Aider.",
+  "version": "1.1.0",
+  "publisher": "benpay",
   "license": "MIT",
   "icon": "media/icon.png",
   "galleryBanner": {
@@ -34,36 +34,77 @@
     "karpathy",
     "claude",
     "cursor",
-    "copilot"
+    "copilot",
+    "windsurf",
+    "cline",
+    "continue",
+    "codex",
+    "opencode"
   ],
   "activationEvents": [
     "onCommand:karpathy-guidelines.show",
+    "onCommand:karpathy-guidelines.quickRef",
     "onCommand:karpathy-guidelines.insertRules",
     "onCommand:karpathy-guidelines.createConfig",
-    "onCommand:karpathy-guidelines.quickRef"
+    "onCommand:karpathy-guidelines.createDetectedConfigs",
+    "onCommand:karpathy-guidelines.createAllConfigs",
+    "onCommand:karpathy-guidelines.listTools",
+    "onCommand:karpathy-guidelines.checkConfigs",
+    "onCommand:karpathy-guidelines.installGlobal",
+    "onCommand:karpathy-guidelines.installGlobalAll"
   ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "karpathy-guidelines.show",
-        "title": "Karpathy Guidelines: Show Rules",
-        "description": "Display the four Karpathy behavioral guidelines in a new tab"
-      },
-      {
-        "command": "karpathy-guidelines.insertRules",
-        "title": "Karpathy Guidelines: Insert into Current File",
-        "description": "Insert guideline rules as comments at cursor position"
-      },
-      {
-        "command": "karpathy-guidelines.createConfig",
-        "title": "Karpathy Guidelines: Create Config Files",
-        "description": "Create .cursorrules, .windsurf/rules, or .clinerules in workspace"
+        "title": "Karpathy: Show Rules",
+        "description": "Display the full behavioral guidelines in a new tab"
       },
       {
         "command": "karpathy-guidelines.quickRef",
-        "title": "Karpathy Guidelines: Quick Reference",
-        "description": "Show a quick reference panel with the four principles"
+        "title": "Karpathy: Quick Reference",
+        "description": "Open the quick reference panel with four principles"
+      },
+      {
+        "command": "karpathy-guidelines.insertRules",
+        "title": "Karpathy: Insert into Current File",
+        "description": "Insert guidelines at cursor position (as comments or markdown)"
+      },
+      {
+        "command": "karpathy-guidelines.createConfig",
+        "title": "Karpathy: Create Configs for Selected Tools",
+        "description": "Generate config files for one or more selected AI coding tools"
+      },
+      {
+        "command": "karpathy-guidelines.createDetectedConfigs",
+        "title": "Karpathy: Create Detected Tool Configs",
+        "description": "Detect AI tools from the workspace and generate compatible config files"
+      },
+      {
+        "command": "karpathy-guidelines.createAllConfigs",
+        "title": "Karpathy: Create All Supported Configs",
+        "description": "Generate config files for every supported AI coding tool"
+      },
+      {
+        "command": "karpathy-guidelines.listTools",
+        "title": "Karpathy: List Supported Tools",
+        "description": "Show supported AI coding tools and the files generated for them"
+      },
+      {
+        "command": "karpathy-guidelines.checkConfigs",
+        "title": "Karpathy: Check Workspace Configs",
+        "description": "Check which config files exist in the current workspace"
+      },
+      {
+        "command": "karpathy-guidelines.installGlobal",
+        "title": "Karpathy: Install Global Configs",
+        "description": "Install global configs for selected CLI tools to ~/.claude, ~/.codex, etc."
+      },
+      {
+        "command": "karpathy-guidelines.installGlobalAll",
+        "title": "Karpathy: Install All Global Configs",
+        "description": "Install global configs for all supported CLI tools"
       }
     ],
     "menus": {
@@ -77,6 +118,11 @@
           "command": "karpathy-guidelines.show",
           "when": "editorTextFocus",
           "group": "karpathy@2"
+        },
+        {
+          "command": "karpathy-guidelines.quickRef",
+          "when": "editorTextFocus",
+          "group": "karpathy@3"
         }
       ],
       "explorer/context": [
@@ -84,6 +130,31 @@
           "command": "karpathy-guidelines.createConfig",
           "when": "explorerResourceIsFolder",
           "group": "karpathy@1"
+        },
+        {
+          "command": "karpathy-guidelines.createAllConfigs",
+          "when": "explorerResourceIsFolder",
+          "group": "karpathy@2"
+        },
+        {
+          "command": "karpathy-guidelines.createDetectedConfigs",
+          "when": "explorerResourceIsFolder",
+          "group": "karpathy@3"
+        },
+        {
+          "command": "karpathy-guidelines.checkConfigs",
+          "when": "explorerResourceIsFolder",
+          "group": "karpathy@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "karpathy-guidelines.createAllConfigs",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "karpathy-guidelines.createDetectedConfigs",
+          "when": "workspaceFolderCount > 0"
         }
       ]
     },
@@ -94,18 +165,23 @@
           "type": "string",
           "default": "markdown",
           "enum": ["markdown", "comments", "plaintext"],
-          "description": "How to insert guidelines when using Insert command"
+          "description": "Format when inserting guidelines into current file"
         },
         "karpathyGuidelines.autoActivate": {
           "type": "boolean",
           "default": false,
-          "description": "Automatically show quick reference when editing markdown files"
+          "description": "Show quick reference when opening markdown files"
         },
         "karpathyGuidelines.defaultTool": {
           "type": "string",
           "default": "cursor",
-          "enum": ["cursor", "windsurf", "cline", "continue", "copilot"],
-          "description": "Default tool for creating config files"
+          "enum": ["claude-code", "codex", "gemini-cli", "aider", "cursor", "windsurf", "copilot", "cline", "continue"],
+          "description": "Default tool preselected in the target picker"
+        },
+        "karpathyGuidelines.overwriteExisting": {
+          "type": "boolean",
+          "default": false,
+          "description": "Overwrite existing config files without prompting"
         }
       }
     }

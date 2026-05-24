@@ -1,7 +1,4 @@
-// Guidelines content - The four Karpathy principles
-export const GUIDELINES_CONTENT = `# Karpathy Behavioral Guidelines
-
-Behavioral guidelines to reduce common LLM coding mistakes.
+const GUIDELINES_BODY = `Behavioral guidelines to reduce common LLM coding mistakes.
 
 **Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
@@ -48,15 +45,15 @@ The test: Every changed line should trace directly to the user's request.
 **Define success criteria. Loop until verified.**
 
 Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
+- "Add validation" -> "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" -> "Write a test that reproduces it, then make it pass"
+- "Refactor X" -> "Ensure tests pass before and after"
 
 For multi-step tasks, state a brief plan:
 \`\`\`
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
+1. [Step] -> verify: [check]
+2. [Step] -> verify: [check]
+3. [Step] -> verify: [check]
 \`\`\`
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
@@ -65,6 +62,10 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 **These guidelines work if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
 `;
+
+export const GUIDELINES_CONTENT = `# Karpathy Behavioral Guidelines
+
+${GUIDELINES_BODY}`;
 
 export const QUICK_REFERENCE = `## Karpathy Guidelines - Quick Ref
 
@@ -76,58 +77,173 @@ export const QUICK_REFERENCE = `## Karpathy Guidelines - Quick Ref
 | 4 | Goal-Driven | Define success criteria, verify each step |
 `;
 
-export const CONFIG_TEMPLATES = {
-  cursor: `---
-description: Behavioral guidelines to reduce common LLM coding mistakes. Use when writing, reviewing, or refactoring code.
+export function buildAgentsContent(): string {
+  return `# Karpathy Behavioral Guidelines
+
+Shared source of truth for AI coding agents used in this repository.
+
+${GUIDELINES_BODY}
+`;
+}
+
+export function buildClaudeContent(): string {
+  return `# Claude Code Project Memory
+
+Load the shared repository instructions from \`AGENTS.md\`.
+
+@AGENTS.md
+
+## Claude Code Notes
+
+- Treat \`AGENTS.md\` as the canonical project guidance.
+- Update \`AGENTS.md\` first when the team changes agent behavior.
+`;
+}
+
+export function buildGeminiContent(): string {
+  return `# Gemini CLI Project Context
+
+Load the shared repository instructions from \`AGENTS.md\`.
+
+@AGENTS.md
+
+## Gemini Notes
+
+- Use \`AGENTS.md\` as the canonical project guidance.
+- Keep Gemini-specific notes here only when they do not apply to other tools.
+`;
+}
+
+export function buildGeminiSettingsContent(): string {
+  return `{
+  "contextFileName": [
+    "AGENTS.md",
+    "GEMINI.md"
+  ]
+}
+`;
+}
+
+export function buildCursorRuleContent(): string {
+  return `---
+description: Karpathy behavioral guidelines for AI coding work
 alwaysApply: true
 ---
 
 # Karpathy Guidelines
 
-(Same content as CLAUDE.md - see project root)
-`,
+Prefer the shared \`AGENTS.md\` guidance when there is overlap.
 
-  windsurf: `---
+${GUIDELINES_BODY}
+`;
+}
+
+export function buildWindsurfRuleContent(): string {
+  return `---
 name: karpathy-guidelines
-description: Behavioral guidelines to reduce common LLM coding mistakes
+description: Karpathy behavioral guidelines for AI coding work
 alwaysApply: true
 ---
 
 # Karpathy Guidelines
 
-(Same content as CLAUDE.md - see project root)
-`,
+Prefer the shared \`AGENTS.md\` guidance when there is overlap.
 
-  cline: `---
+${GUIDELINES_BODY}
+`;
+}
+
+export function buildCopilotInstructionsContent(): string {
+  return `# Karpathy Guidelines for GitHub Copilot
+
+Repository-wide instructions for Copilot. Keep these aligned with \`AGENTS.md\`.
+
+## Operating Rules
+
+1. Think before coding. State assumptions and ask if the task is ambiguous.
+2. Prefer the simplest implementation that satisfies the request.
+3. Make surgical changes. Do not refactor unrelated code.
+4. Work toward verifiable success criteria and check them before stopping.
+
+## Full Guidance
+
+${GUIDELINES_BODY}
+`;
+}
+
+export function buildCopilotPathInstructionsContent(): string {
+  return `---
+applyTo: "**"
+---
+
+# Karpathy Guidelines
+
+Use \`AGENTS.md\` as the shared source of truth when reasoning about project behavior.
+
+## Short Form
+
+- State assumptions and ask questions when context is missing.
+- Keep implementations simple and avoid speculative abstractions.
+- Limit edits to the requested scope.
+- Verify outcomes against explicit success criteria.
+`;
+}
+
+export function buildClineRuleContent(): string {
+  return `# Karpathy Guidelines for Cline
+
+${GUIDELINES_BODY}
+`;
+}
+
+export function buildContinueRuleContent(): string {
+  return `---
 name: karpathy-guidelines
-description: Behavioral guidelines to reduce common LLM coding mistakes
+description: Apply Karpathy behavioral guidelines before changing code
 alwaysApply: true
 ---
 
 # Karpathy Guidelines
 
-(Same content as CLAUDE.md - see project root)
-`,
+${GUIDELINES_BODY}
+`;
+}
 
-  continue: `# Place this in .continue/checks/karpathy-guidelines.md
+export function buildAiderConfigContent(): string {
+  return `# Load shared repository guidance on every aider session.
+read:
+  - AGENTS.md
+`;
+}
 
----
-name: karpathy-guidelines
-description: Behavioral guidelines check
----
+export function buildOpenCodeContent(): string {
+  return `# Karpathy Guidelines for OpenCode
 
-# Karpathy Guidelines Check
+Load the shared repository instructions from \`AGENTS.md\`.
 
-Verify code changes follow the four principles.
-`,
+@AGENTS.md
 
-  copilot: `# Karpathy Guidelines for Copilot
+## OpenCode Notes
 
-When assisting with code, follow these principles:
+- Treat \`AGENTS.md\` as the canonical project guidance.
+- OpenCode will automatically load AGENTS.md when present in the project root.
+`;
+}
 
-1. **Think Before Coding** - State assumptions, ask for clarification
-2. **Simplicity First** - Minimum code that solves the problem
-3. **Surgical Changes** - Only touch what you must
-4. **Goal-Driven** - Define and verify success criteria
-`
-};
+export function buildCopilotCliInstructionsContent(): string {
+  return `# Karpathy Guidelines for GitHub Copilot CLI
+
+Repository-wide instructions for \`gh copilot\` CLI sessions.
+
+## Operating Rules
+
+1. Think before coding. State assumptions and ask if the task is ambiguous.
+2. Prefer the simplest implementation that satisfies the request.
+3. Make surgical changes. Do not refactor unrelated code.
+4. Work toward verifiable success criteria and check them before stopping.
+
+## Full Guidance
+
+${GUIDELINES_BODY}
+`;
+}
