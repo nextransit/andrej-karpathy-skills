@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Background circle -->
+  <circle cx="64" cy="64" r="60" fill="#1e1e1e" stroke="#569cd6" stroke-width="4"/>
+
+  <!-- Brain/思维 icon -->
+  <path d="M40 50 Q35 45 38 40 Q42 35 48 38 Q50 35 55 38 Q60 32 68 38 Q75 35 78 40 Q82 45 78 50 Q82 55 78 62 Q82 68 75 72 Q70 78 62 75 Q55 80 50 75 Q45 78 40 72 Q35 68 38 62 Q35 55 40 50 Z"
+        fill="none" stroke="#4ec9b0" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Checkmark / 准则 -->
+  <path d="M45 55 L55 65 L82 38" fill="none" stroke="#569cd6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- 4 lines representing principles -->
+  <line x1="48" y1="78" x2="80" y2="78" stroke="#808080" stroke-width="2" stroke-linecap="round"/>
+  <line x1="48" y1="86" x2="70" y2="86" stroke="#808080" stroke-width="2" stroke-linecap="round"/>
+</svg>

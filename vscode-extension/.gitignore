@@ -1,0 +1,19 @@
+# VSCode Extension
+out/
+node_modules/
+*.vsix
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode-test/
+.idea/
+*.swp
+*.swo
+
+# Dependencies
+.env
+.env.local

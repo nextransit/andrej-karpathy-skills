@@ -1,0 +1,132 @@
+{
+  "name": "@anthropicai/vscode-karpathy-guidelines",
+  "displayName": "Karpathy Guidelines (Anthropic)",
+  "description": "Apply Andrej Karpathy's behavioral guidelines to reduce common LLM coding mistakes",
+  "version": "1.0.0",
+  "publisher": "decard",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nextransit/andrej-karpathy-skills"
+  },
+  "bugs": {
+    "url": "https://github.com/nextransit/andrej-karpathy-skills/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Education",
+    "Programming Languages",
+    "Snippets"
+  ],
+  "keywords": [
+    "guidelines",
+    "best-practices",
+    "coding",
+    "LLM",
+    "AI",
+    "karpathy",
+    "claude",
+    "cursor",
+    "copilot"
+  ],
+  "activationEvents": [
+    "onCommand:karpathy-guidelines.show",
+    "onCommand:karpathy-guidelines.insertRules",
+    "onCommand:karpathy-guidelines.createConfig",
+    "onCommand:karpathy-guidelines.quickRef"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "karpathy-guidelines.show",
+        "title": "Karpathy Guidelines: Show Rules",
+        "description": "Display the four Karpathy behavioral guidelines in a new tab"
+      },
+      {
+        "command": "karpathy-guidelines.insertRules",
+        "title": "Karpathy Guidelines: Insert into Current File",
+        "description": "Insert guideline rules as comments at cursor position"
+      },
+      {
+        "command": "karpathy-guidelines.createConfig",
+        "title": "Karpathy Guidelines: Create Config Files",
+        "description": "Create .cursorrules, .windsurf/rules, or .clinerules in workspace"
+      },
+      {
+        "command": "karpathy-guidelines.quickRef",
+        "title": "Karpathy Guidelines: Quick Reference",
+        "description": "Show a quick reference panel with the four principles"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "karpathy-guidelines.insertRules",
+          "when": "editorTextFocus",
+          "group": "karpathy@1"
+        },
+        {
+          "command": "karpathy-guidelines.show",
+          "when": "editorTextFocus",
+          "group": "karpathy@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "karpathy-guidelines.createConfig",
+          "when": "explorerResourceIsFolder",
+          "group": "karpathy@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Karpathy Guidelines",
+      "properties": {
+        "karpathyGuidelines.insertAs": {
+          "type": "string",
+          "default": "markdown",
+          "enum": ["markdown", "comments", "plaintext"],
+          "description": "How to insert guidelines when using Insert command"
+        },
+        "karpathyGuidelines.autoActivate": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically show quick reference when editing markdown files"
+        },
+        "karpathyGuidelines.defaultTool": {
+          "type": "string",
+          "default": "cursor",
+          "enum": ["cursor", "windsurf", "cline", "continue", "copilot"],
+          "description": "Default tool for creating config files"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^2.22.0",
+    "glob": "^10.3.10",
+    "mocha": "^10.2.0",
+    "typescript": "^5.3.2"
+  },
+  "dependencies": {}
+}
