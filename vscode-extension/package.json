@@ -164,7 +164,11 @@
         "karpathyGuidelines.insertAs": {
           "type": "string",
           "default": "markdown",
-          "enum": ["markdown", "comments", "plaintext"],
+          "enum": [
+            "markdown",
+            "comments",
+            "plaintext"
+          ],
           "description": "Format when inserting guidelines into current file"
         },
         "karpathyGuidelines.autoActivate": {
@@ -175,7 +179,17 @@
         "karpathyGuidelines.defaultTool": {
           "type": "string",
           "default": "cursor",
-          "enum": ["claude-code", "codex", "gemini-cli", "aider", "cursor", "windsurf", "copilot", "cline", "continue"],
+          "enum": [
+            "claude-code",
+            "codex",
+            "gemini-cli",
+            "aider",
+            "cursor",
+            "windsurf",
+            "copilot",
+            "cline",
+            "continue"
+          ],
           "description": "Default tool preselected in the target picker"
         },
         "karpathyGuidelines.overwriteExisting": {
@@ -186,7 +200,11 @@
         "karpathyGuidelines.language": {
           "type": "string",
           "default": "auto",
-          "enum": ["auto", "en", "zh-CN"],
+          "enum": [
+            "auto",
+            "en",
+            "zh-CN"
+          ],
           "description": "Language for generated configs: auto (system), en (English), zh-CN (Chinese)"
         }
       }
@@ -194,7 +212,7 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ --sourceMap false",
     "watch": "tsc -watch -p ./",
     "package": "vsce package --no-dependencies",
     "publish": "vsce publish"
@@ -202,13 +220,12 @@
   "devDependencies": {
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.6",
-    "@types/node": "^20.10.0",
+    "@types/node": "^20.19.41",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.3.8",
     "@vscode/vsce": "^2.22.0",
     "glob": "^10.3.10",
     "mocha": "^10.2.0",
     "typescript": "^5.3.2"
-  },
-  "dependencies": {}
+  }
 }

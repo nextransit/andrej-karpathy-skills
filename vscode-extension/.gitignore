@@ -1,19 +1,24 @@
-# VSCode Extension
+# Build output
 out/
 node_modules/
 *.vsix
+*.tgz
 *.log
+coverage/
+.nyc_output/
+.eslintcache
 
 # OS
 .DS_Store
 Thumbs.db
 
-# IDE
+# IDE / editor
 .vscode-test/
 .idea/
 *.swp
 *.swo
+.history/
 
-# Dependencies
+# Local env
 .env
 .env.local
