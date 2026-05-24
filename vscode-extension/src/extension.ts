@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { GUIDELINES_CONTENT } from './guidelines';
 import { Language, LanguageOption, resolveLanguage } from './i18n';
@@ -29,7 +30,7 @@ interface InstallDialogState {
 }
 
 const CONFIG_BASE = 'karpathyGuidelines';
-const INSTALL_DIALOG_SHOWN_VERSION_KEY = 'karpathyGuidelines.installDialogShownVersion';
+const INSTALL_DIALOG_SHOWN_INSTALL_ID_KEY = 'karpathyGuidelines.installDialogShownInstallId';
 
 function getWorkspaceRoot(uri?: vscode.Uri): string {
   if (uri?.fsPath) {
@@ -1012,12 +1013,21 @@ async function showInstallDialog(initialType: InstallType = 'global', selectedTo
 
 async function maybeShowInstallDialogAfterInstall(context: vscode.ExtensionContext): Promise<void> {
   const version = String(context.extension.packageJSON.version || 'unknown');
-  const shownVersion = context.globalState.get<string>(INSTALL_DIALOG_SHOWN_VERSION_KEY);
-  if (shownVersion === version) {
+  let installId = `${version}:${context.extensionPath}`;
+
+  try {
+    const stat = await fs.promises.stat(context.extensionPath);
+    installId = `${installId}:${Math.round(stat.mtimeMs)}`;
+  } catch {
+    // Fall back to version + path if the extension directory cannot be stat'ed.
+  }
+
+  const shownInstallId = context.globalState.get<string>(INSTALL_DIALOG_SHOWN_INSTALL_ID_KEY);
+  if (shownInstallId === installId) {
     return;
   }
 
-  await context.globalState.update(INSTALL_DIALOG_SHOWN_VERSION_KEY, version);
+  await context.globalState.update(INSTALL_DIALOG_SHOWN_INSTALL_ID_KEY, installId);
   setTimeout(() => {
     if (!installDialogPanel) {
       void showInstallDialog('global');
@@ -1221,6 +1231,10 @@ export function activate(context: vscode.ExtensionContext): void {
     await showInstallDialog('global', getInstallableToolIds('global', allTools, getWorkspaceRoot()));
   });
 
+  const openSettingsCommand = vscode.commands.registerCommand('karpathy-guidelines.openSettings', async () => {
+    await showInstallDialog('global');
+  });
+
   const autoActivateListener = vscode.workspace.onDidOpenTextDocument(async (document: any) => {
     const config = vscode.workspace.getConfiguration('karpathyGuidelines');
     if (!(config.get('autoActivate', false) as boolean)) {
@@ -1245,6 +1259,7 @@ export function activate(context: vscode.ExtensionContext): void {
     installWorkspaceCommand,
     installLocalCommand,
     installGlobalAllCommand,
+    openSettingsCommand,
     autoActivateListener
   );
 

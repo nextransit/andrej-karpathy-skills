@@ -2,6 +2,10 @@
 
 Apply Andrej Karpathy's behavioral guidelines across the main AI coding CLIs and IDEs from a single VS Code extension.
 
+<p align="center">
+  <img src="media/screenshot.png" alt="Karpathy Guidelines install dialog" width="560">
+</p>
+
 ## What changed
 
 This extension now uses a shared `AGENTS.md` source of truth when possible, then generates tool-specific entrypoints only for tools that need them.
@@ -20,6 +24,11 @@ That makes it practical to keep Claude Code, Codex, Gemini CLI, Cursor, Windsurf
 | `Karpathy: Create All Supported Configs` | Generate every supported target config |
 | `Karpathy: List Supported Tools` | Show supported tools, output paths, and notes |
 | `Karpathy: Check Workspace Configs` | Inspect which workspace configs already exist |
+| `Karpathy: Install Global Configs` | Open the install dialog in global mode |
+| `Karpathy: Install Workspace Configs` | Open the install dialog in workspace mode |
+| `Karpathy: Install Local Configs` | Alias for workspace install |
+| `Karpathy: Install All Global Configs` | Open the install dialog with all global targets selected |
+| `Karpathy: Open Settings` | Open the install and configuration dialog |
 
 ## Supported targets
 
@@ -52,7 +61,7 @@ code --extensionDevelopmentPath=$(pwd)
 cd vscode-extension
 npm install
 npm run package
-code --install-extension karpathy-guidelines-1.1.0.vsix
+code --install-extension karpathy-guidelines-1.1.1.vsix
 ```
 
 ## Configuration
@@ -62,7 +71,8 @@ code --install-extension karpathy-guidelines-1.1.0.vsix
 | `karpathyGuidelines.insertAs` | `markdown` | Insert format: `markdown`, `comments`, or `plaintext` |
 | `karpathyGuidelines.autoActivate` | `false` | Automatically open quick reference when a Markdown file is opened |
 | `karpathyGuidelines.defaultTool` | `cursor` | Default preselected target in the multi-tool picker |
-| `karpathyGuidelines.overwriteExisting` | `false` | Overwrite existing config files during generation |
+| `karpathyGuidelines.overwriteExisting` | `true` | Overwrite existing config files during generation |
+| `karpathyGuidelines.language` | `auto` | Language for generated configs and dialogs |
 
 ## Design approach
 

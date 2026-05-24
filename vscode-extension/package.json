@@ -2,7 +2,7 @@
   "name": "karpathy-guidelines",
   "displayName": "Karpathy Guidelines",
   "description": "Apply Andrej Karpathy's behavioral guidelines across Claude Code, Codex, Gemini CLI, Cursor, Windsurf, Copilot, Cline, Continue, and Aider.",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "publisher": "benpay",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -54,7 +54,8 @@
     "onCommand:karpathy-guidelines.installGlobal",
     "onCommand:karpathy-guidelines.installWorkspace",
     "onCommand:karpathy-guidelines.installLocal",
-    "onCommand:karpathy-guidelines.installGlobalAll"
+    "onCommand:karpathy-guidelines.installGlobalAll",
+    "onCommand:karpathy-guidelines.openSettings"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -118,6 +119,11 @@
         "command": "karpathy-guidelines.installGlobalAll",
         "title": "Karpathy: Install All Global Configs",
         "description": "Open the install dialog with every globally installable tool selected"
+      },
+      {
+        "command": "karpathy-guidelines.openSettings",
+        "title": "Karpathy: Open Settings",
+        "description": "Open the Karpathy install and configuration dialog"
       }
     ],
     "menus": {
@@ -182,6 +188,9 @@
         },
         {
           "command": "karpathy-guidelines.installGlobalAll"
+        },
+        {
+          "command": "karpathy-guidelines.openSettings"
         }
       ]
     },
