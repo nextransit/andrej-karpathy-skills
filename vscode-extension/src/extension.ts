@@ -22,6 +22,12 @@ interface ToolQuickPickItem {
   tool: ToolConfig;
 }
 
+interface GlobalToolQuickPickItem {
+  label: string;
+  description: string;
+  tool: ToolConfig;
+}
+
 const CONFIG_BASE = 'karpathyGuidelines';
 
 function getWorkspaceRoot(uri?: vscode.Uri): string {
@@ -33,7 +39,7 @@ function getWorkspaceRoot(uri?: vscode.Uri): string {
 
 function getCurrentLanguage(): Language {
   const config = vscode.workspace.getConfiguration(CONFIG_BASE);
-  const option = config.get<LanguageOption>('language', 'auto');
+  const option = config.get('language', 'auto') as LanguageOption;
   return resolveLanguage(option);
 }
 
@@ -74,68 +80,123 @@ function getCommentPrefix(languageId: string): string {
   return prefixes[languageId] || '# ';
 }
 
-function buildGenerationMarkdown(rootPath: string, toolIds: string[], report: Awaited<ReturnType<typeof generateConfigsForTools>>, note?: string): string {
+function buildGenerationMarkdown(rootPath: string, toolIds: string[], report: Awaited<ReturnType<typeof generateConfigsForTools>>, note?: string, lang: Language = 'en'): string {
+  const str = (key: string) => {
+    const translations: Record<string, Record<Language, string>> = {
+      'title': { en: 'Karpathy Config Generation', 'zh-CN': 'Karpathy 配置生成' },
+      'targetPath': { en: 'Target path', 'zh-CN': '目标路径' },
+      'generatedFor': { en: 'Generated for', 'zh-CN': '为以下工具生成' },
+      'fileResults': { en: 'File Results', 'zh-CN': '文件结果' },
+      'status': { en: 'Status', 'zh-CN': '状态' },
+      'file': { en: 'File', 'zh-CN': '文件' },
+      'description': { en: 'Description', 'zh-CN': '描述' },
+      'toolCoverage': { en: 'Tool Coverage', 'zh-CN': '工具覆盖' },
+      'tool': { en: 'Tool', 'zh-CN': '工具' },
+      'type': { en: 'Type', 'zh-CN': '类型' },
+      'files': { en: 'Files', 'zh-CN': '文件' },
+      'noFiles': { en: 'No files generated', 'zh-CN': '未生成文件' },
+      'created': { en: 'created', 'zh-CN': '已创建' },
+      'updated': { en: 'updated', 'zh-CN': '已更新' },
+      'skipped': { en: 'skipped', 'zh-CN': '已跳过' },
+      'unchanged': { en: 'unchanged', 'zh-CN': '未更改' },
+      'error': { en: 'error', 'zh-CN': '错误' },
+      'cli': { en: 'CLI', 'zh-CN': '命令行工具' },
+      'ide': { en: 'IDE', 'zh-CN': 'IDE' },
+      'vscode-ext': { en: 'VSCode Extension', 'zh-CN': 'VSCode 扩展' },
+    };
+    return translations[key]?.[lang] || translations[key]?.['en'] || key;
+  };
+
   const fileRows = report.allFiles
-    .map((file) => `| ${file.status} | \`${file.relativePath}\` | ${file.description} |`)
+    .map((file) => `| ${str(file.status)} | \`${file.relativePath}\` | ${file.description} |`)
     .join('\n');
   const toolRows = report.tools
-    .map((result) => `| ${result.tool.displayName} | ${result.tool.type} | ${result.files.map((file) => `\`${file.relativePath}\``).join('<br>')} |`)
+    .map((result) => `| ${result.tool.displayName} | ${str(result.tool.type)} | ${result.files.map((file) => `\`${file.relativePath}\``).join('<br>')} |`)
     .join('\n');
 
-  return `# Karpathy Config Generation
+  return `# ${str('title')}
 
-Target path: \`${rootPath}\`
+${str('targetPath')}: \`${rootPath}\`
 
-Generated for: ${toolIds.join(', ')}
+${str('generatedFor')}: ${toolIds.join(', ')}
 ${note ? `\n${note}\n` : ''}
 
-## File Results
+## ${str('fileResults')}
 
-| Status | File | Description |
+| ${str('status')} | ${str('file')} | ${str('description')} |
 |---|---|---|
-${fileRows || '| - | - | No files generated |'}
+${fileRows || `| - | - | ${str('noFiles')} |`}
 
-## Tool Coverage
+## ${str('toolCoverage')}
 
-| Tool | Type | Files |
+| ${str('tool')} | ${str('type')} | ${str('files')} |
 |---|---|---|
 ${toolRows || '| - | - | - |'}
 `;
 }
 
-function buildSupportedToolsMarkdown(tools: ToolConfig[]): string {
+function buildSupportedToolsMarkdown(tools: ToolConfig[], lang: Language = 'en'): string {
+  const str = (key: string) => {
+    const translations: Record<string, Record<Language, string>> = {
+      'title': { en: 'Supported AI Tools', 'zh-CN': '支持的 AI 工具' },
+      'subtitle': { en: 'This extension generates a shared `AGENTS.md` source of truth where possible, then adds tool-specific entrypoints only when a tool needs them.', 'zh-CN': '此扩展尽可能生成共享的 `AGENTS.md` 作为事实来源，仅在工具需要时添加特定入口点。' },
+      'tool': { en: 'Tool', 'zh-CN': '工具' },
+      'type': { en: 'Type', 'zh-CN': '类型' },
+      'primaryFiles': { en: 'Primary Files', 'zh-CN': '主要文件' },
+      'notes': { en: 'Notes', 'zh-CN': '备注' },
+      'cli': { en: 'CLI', 'zh-CN': '命令行工具' },
+      'ide': { en: 'IDE', 'zh-CN': 'IDE' },
+      'vscode-ext': { en: 'VSCode Extension', 'zh-CN': 'VSCode 扩展' },
+    };
+    return translations[key]?.[lang] || translations[key]?.['en'] || key;
+  };
+
   const rows = tools
     .map(
       (tool) =>
-        `| ${tool.displayName} | ${tool.type} | ${tool.primaryPaths.map((relativePath) => `\`${relativePath}\``).join('<br>')} | ${tool.description} |`
+        `| ${tool.displayName} | ${str(tool.type)} | ${tool.primaryPaths.map((relativePath) => `\`${relativePath}\``).join('<br>')} | ${tool.description} |`
     )
     .join('\n');
 
-  return `# Supported AI Tools
+  return `# ${str('title')}
 
-This extension generates a shared \`AGENTS.md\` source of truth where possible, then adds tool-specific entrypoints only when a tool needs them.
+${str('subtitle')}
 
-| Tool | Type | Primary Files | Notes |
+| ${str('tool')} | ${str('type')} | ${str('primaryFiles')} | ${str('notes')} |
 |---|---|---|---|
 ${rows}
 `;
 }
 
-function buildWorkspaceStatusMarkdown(rootPath: string, statuses: WorkspaceToolStatus[]): string {
+function buildWorkspaceStatusMarkdown(rootPath: string, statuses: WorkspaceToolStatus[], lang: Language = 'en'): string {
+  const str = (key: string) => {
+    const translations: Record<string, Record<Language, string>> = {
+      'title': { en: 'Workspace AI Tool Status', 'zh-CN': '工作区 AI 工具状态' },
+      'workspace': { en: 'Workspace', 'zh-CN': '工作区' },
+      'tool': { en: 'Tool', 'zh-CN': '工具' },
+      'detected': { en: 'Detected', 'zh-CN': '已检测' },
+      'configured': { en: 'Fully Configured', 'zh-CN': '已配置' },
+      'existingFiles': { en: 'Existing Primary Files', 'zh-CN': '存在的主要文件' },
+      'yes': { en: 'yes', 'zh-CN': '是' },
+      'no': { en: 'no', 'zh-CN': '否' },
+    };
+    return translations[key]?.[lang] || translations[key]?.['en'] || key;
+  };
+
   const rows = statuses
     .map((status) => {
       const configuredPaths = status.existingPrimaryPaths.length
         ? status.existingPrimaryPaths.map((relativePath) => `\`${relativePath}\``).join('<br>')
         : '-';
-      return `| ${status.tool.displayName} | ${status.detected ? 'yes' : 'no'} | ${status.configured ? 'yes' : 'no'} | ${configuredPaths} |`;
+      return `| ${status.tool.displayName} | ${status.detected ? str('yes') : str('no')} | ${status.configured ? str('yes') : str('no')} | ${configuredPaths} |`;
     })
     .join('\n');
 
-  return `# Workspace AI Tool Status
+  return `# ${str('title')}
 
-Workspace: \`${rootPath}\`
+${str('workspace')}: \`${rootPath}\`
 
-| Tool | Detected | Fully Configured | Existing Primary Files |
+| ${str('tool')} | ${str('detected')} | ${str('configured')} | ${str('existingFiles')} |
 |---|---|---|---|
 ${rows}
 `;
@@ -226,7 +287,7 @@ async function showGenerationReport(
   const skipped = report.allFiles.filter((file) => file.status === 'skipped');
   const errored = report.allFiles.filter((file) => file.status === 'error');
 
-  const markdown = buildGenerationMarkdown(rootPath, toolIds, report, note);
+  const markdown = buildGenerationMarkdown(rootPath, toolIds, report, note, lang);
   const document = await vscode.workspace.openTextDocument({
     content: markdown,
     language: 'markdown',
@@ -374,7 +435,8 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   const listToolsCommand = vscode.commands.registerCommand('karpathy-guidelines.listTools', async () => {
-    const markdown = buildSupportedToolsMarkdown(getAllTools());
+    const lang = getCurrentLanguage();
+    const markdown = buildSupportedToolsMarkdown(getAllTools(), lang);
     await openMarkdownDocument(markdown);
   });
 
@@ -385,8 +447,9 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
 
+    const lang = getCurrentLanguage();
     const statuses = await inspectWorkspace(rootPath);
-    await openMarkdownDocument(buildWorkspaceStatusMarkdown(rootPath, statuses));
+    await openMarkdownDocument(buildWorkspaceStatusMarkdown(rootPath, statuses, lang));
   });
 
   const installGlobalCommand = vscode.commands.registerCommand('karpathy-guidelines.installGlobal', async () => {
@@ -408,7 +471,11 @@ export function activate(context: vscode.ExtensionContext): void {
     const config = vscode.workspace.getConfiguration('karpathyGuidelines');
     const overwrite = config.get('overwriteExisting', false) as boolean;
 
-    const results = await installGlobal(selected.map(s => s.tool.id), { overwriteExisting: overwrite }, lang);
+    const results = await installGlobal(
+      selected.map((item: GlobalToolQuickPickItem) => item.tool.id),
+      { overwriteExisting: overwrite },
+      lang
+    );
 
     const created = results.filter(r => r.status === 'created' || r.status === 'updated');
     const skipped = results.filter(r => r.status === 'skipped');

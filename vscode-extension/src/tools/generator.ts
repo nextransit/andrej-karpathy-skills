@@ -94,12 +94,16 @@ async function writeFileResult(
   }
 }
 
-function buildToolResults(toolIds: string[], fileResults: Map<string, GeneratedFileResult>): ToolGenerationResult[] {
+function buildToolResults(
+  toolIds: string[],
+  fileResults: Map<string, GeneratedFileResult>,
+  lang: Language
+): ToolGenerationResult[] {
   return toolIds
     .map((toolId) => TOOLS[toolId])
     .filter((tool): tool is ToolConfig => Boolean(tool))
     .map((tool) => {
-      const files = tool.buildFiles().map((file) => fileResults.get(file.relativePath)).filter(
+      const files = tool.buildFiles(lang).map((file) => fileResults.get(file.relativePath)).filter(
         (file): file is GeneratedFileResult => Boolean(file)
       );
       return {
@@ -113,10 +117,11 @@ function buildToolResults(toolIds: string[], fileResults: Map<string, GeneratedF
 export async function generateConfigsForTools(
   rootPath: string,
   toolIds: string[],
-  options: ConfigGenerationOptions
+  options: ConfigGenerationOptions,
+  lang: Language = 'en'
 ): Promise<GenerationReport> {
   const uniqueToolIds = Array.from(new Set(toolIds.filter((toolId) => Boolean(TOOLS[toolId]))));
-  const dedupedFiles = dedupeFiles(uniqueToolIds);
+  const dedupedFiles = dedupeFiles(uniqueToolIds, lang);
   const fileResults = new Map<string, GeneratedFileResult>();
 
   for (const spec of dedupedFiles.values()) {
@@ -129,7 +134,7 @@ export async function generateConfigsForTools(
   );
 
   return {
-    tools: buildToolResults(uniqueToolIds, fileResults),
+    tools: buildToolResults(uniqueToolIds, fileResults, lang),
     allFiles,
   };
 }
@@ -218,7 +223,12 @@ export async function installGlobal(toolIds: string[], options: ConfigGeneration
 
     // Use the first global path
     const globalPath = expandHome(globalPaths[0]);
-    const content = tool.buildFiles(lang)[0]?.content || '';
+    const generatedFiles = tool.buildFiles(lang);
+    const matchingFile =
+      generatedFiles.find((file) => file.relativePath === path.basename(globalPath)) ||
+      generatedFiles.find((file) => path.basename(file.relativePath) === path.basename(globalPath)) ||
+      generatedFiles[0];
+    const content = matchingFile?.content || '';
 
     try {
       const exists = await pathExists(globalPath);
