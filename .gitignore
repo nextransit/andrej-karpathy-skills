@@ -1,0 +1,5 @@
+# Local secrets
+.env.github
+
+# Local build helper
+build-vsix.sh

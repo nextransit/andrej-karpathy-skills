@@ -83,7 +83,7 @@ export const TOOLS: Record<string, ToolConfig> = {
     description: 'OpenCode CLI with shared AGENTS.md as the canonical source',
     website: 'https://opencode.ai',
     primaryPaths: ['AGENTS.md'],
-    globalPaths: ['~/.config/opencode/config.json'],
+    globalPaths: ['~/.config/opencode/AGENTS.md'],
     detectMarkers: ['.opencode.json', 'opencode.config.json'],
     buildFiles: (lang: Language) => [
       sharedAgentsFile(lang),
@@ -198,7 +198,7 @@ export const TOOLS: Record<string, ToolConfig> = {
     description: 'Cline rules directory plus shared AGENTS.md guidance',
     website: 'https://docs.cline.bot',
     primaryPaths: ['.clinerules/karpathy-guidelines.md'],
-    globalPaths: ['~/.clinerules'],
+    globalPaths: ['~/.clinerules/karpathy-guidelines.md'],
     detectMarkers: ['.clinerules', '.clinerules/karpathy-guidelines.md'],
     buildFiles: (lang: Language) => [
       sharedAgentsFile(lang),

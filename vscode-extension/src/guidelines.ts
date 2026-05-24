@@ -161,36 +161,24 @@ export const GUIDELINES_CONTENT = buildGuidelinesContent('en', true);
 export function buildAgentsContent(lang: Language): string {
   const body = getGuidelinesBody(lang);
   const header = lang === 'zh-CN'
-    ? '# Karpathy 行为准则\n\nAI 编码代理使用的共享事实来源。\n'
-    : '# Karpathy Behavioral Guidelines\n\nShared source of truth for AI coding agents used in this repository.\n';
+    ? `# Karpathy 行为准则
+
+AI 编码代理使用的共享事实来源。
+
+## 语言规则
+
+- **始终使用中文回复**，除非用户明确要求使用其他语言。
+`
+    : `# Karpathy Behavioral Guidelines
+
+Shared source of truth for AI coding agents used in this repository.
+`;
   return header + body;
 }
 
 export function buildClaudeContent(lang: Language): string {
-  if (lang === 'zh-CN') {
-    return `# Claude Code 项目记忆
-
-从 \`AGENTS.md\` 加载共享的仓库指令。
-
-@AGENTS.md
-
-## Claude Code 注意事项
-
-- 将 \`AGENTS.md\` 视为规范的项目指导。
-- 当团队更改代理行为时，首先更新 \`AGENTS.md\`。
-`;
-  }
-  return `# Claude Code Project Memory
-
-Load the shared repository instructions from \`AGENTS.md\`.
-
-@AGENTS.md
-
-## Claude Code Notes
-
-- Treat \`AGENTS.md\` as the canonical project guidance.
-- Update \`AGENTS.md\` first when the team changes agent behavior.
-`;
+  // CLAUDE.md contains the full guidelines (same as AGENTS.md)
+  return buildAgentsContent(lang);
 }
 
 export function buildGeminiContent(lang: Language): string {

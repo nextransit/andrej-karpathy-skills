@@ -42,6 +42,7 @@
     "opencode"
   ],
   "activationEvents": [
+    "*",
     "onCommand:karpathy-guidelines.show",
     "onCommand:karpathy-guidelines.quickRef",
     "onCommand:karpathy-guidelines.insertRules",
@@ -51,6 +52,8 @@
     "onCommand:karpathy-guidelines.listTools",
     "onCommand:karpathy-guidelines.checkConfigs",
     "onCommand:karpathy-guidelines.installGlobal",
+    "onCommand:karpathy-guidelines.installWorkspace",
+    "onCommand:karpathy-guidelines.installLocal",
     "onCommand:karpathy-guidelines.installGlobalAll"
   ],
   "main": "./out/extension.js",
@@ -102,9 +105,19 @@
         "description": "Install global configs for selected CLI tools to ~/.claude, ~/.codex, etc."
       },
       {
+        "command": "karpathy-guidelines.installWorkspace",
+        "title": "Karpathy: Install Workspace Configs",
+        "description": "Open the install dialog and write selected tool configs into the current workspace"
+      },
+      {
+        "command": "karpathy-guidelines.installLocal",
+        "title": "Karpathy: Install Local Configs",
+        "description": "Open the install dialog and write selected tool configs into the current workspace"
+      },
+      {
         "command": "karpathy-guidelines.installGlobalAll",
         "title": "Karpathy: Install All Global Configs",
-        "description": "Install global configs for all supported CLI tools"
+        "description": "Open the install dialog with every globally installable tool selected"
       }
     ],
     "menus": {
@@ -155,6 +168,20 @@
         {
           "command": "karpathy-guidelines.createDetectedConfigs",
           "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "karpathy-guidelines.installWorkspace",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "karpathy-guidelines.installLocal",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "karpathy-guidelines.installGlobal"
+        },
+        {
+          "command": "karpathy-guidelines.installGlobalAll"
         }
       ]
     },
@@ -194,7 +221,7 @@
         },
         "karpathyGuidelines.overwriteExisting": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Overwrite existing config files without prompting"
         },
         "karpathyGuidelines.language": {

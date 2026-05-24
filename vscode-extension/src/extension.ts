@@ -6,7 +6,6 @@ import {
   detectTools,
   generateConfigsForTools,
   getAllTools,
-  getGlobalPaths,
   getRecommendedToolIds,
   installGlobal,
   inspectWorkspace,
@@ -22,13 +21,15 @@ interface ToolQuickPickItem {
   tool: ToolConfig;
 }
 
-interface GlobalToolQuickPickItem {
-  label: string;
-  description: string;
-  tool: ToolConfig;
+type InstallType = 'global' | 'workspace';
+
+interface InstallDialogState {
+  installType: InstallType;
+  selectedToolIds: string[];
 }
 
 const CONFIG_BASE = 'karpathyGuidelines';
+const INSTALL_DIALOG_SHOWN_VERSION_KEY = 'karpathyGuidelines.installDialogShownVersion';
 
 function getWorkspaceRoot(uri?: vscode.Uri): string {
   if (uri?.fsPath) {
@@ -273,6 +274,757 @@ function buildQuickRefHtml(lang: Language): string {
 </html>`;
 }
 
+let installDialogPanel: vscode.WebviewPanel | undefined;
+
+function getInstallableToolIds(installType: InstallType, tools: ToolConfig[], rootPath: string): string[] {
+  if (installType === 'global') {
+    return tools.filter((tool) => Boolean(tool.globalPaths?.length)).map((tool) => tool.id);
+  }
+
+  return rootPath ? tools.map((tool) => tool.id) : [];
+}
+
+function buildInstallDialogHtml(
+  langOpt: LanguageOption,
+  tools: ToolConfig[],
+  rootPath: string,
+  state: InstallDialogState = { installType: 'global', selectedToolIds: [] }
+): string {
+  const lang = resolveLanguage(langOpt);
+  const title = lang === 'zh-CN' ? '安装 Karpathy 行为准则' : 'Install Karpathy Guidelines';
+  const subtitle = lang === 'zh-CN'
+    ? '为 AI 编码工具安装全局配置或工作区配置'
+    : 'Install global or workspace configs for AI coding tools';
+  const selectAll = lang === 'zh-CN' ? '全选' : 'Select All';
+  const install = lang === 'zh-CN' ? '安装' : 'Install';
+  const cancel = lang === 'zh-CN' ? '取消' : 'Cancel';
+  const installGlobal = lang === 'zh-CN' ? '安装全局配置' : 'Install Global';
+  const installWorkspace = lang === 'zh-CN' ? '安装到工作区' : 'Install to Workspace';
+  const workspaceMissing = lang === 'zh-CN' ? '请先打开工作区文件夹' : 'Open a workspace folder first';
+  const unavailableGlobal = lang === 'zh-CN' ? '该工具没有全局配置路径' : 'No global install path for this tool';
+  const quickReference = lang === 'zh-CN' ? '快速参考' : 'Quick Reference';
+  const quickReferenceTitle = t(lang, 'qrTitle');
+  const quickReferenceClose = lang === 'zh-CN' ? '关闭' : 'Close';
+  const crossTool = lang === 'zh-CN' ? '跨工具策略' : 'Cross-tool';
+  const mainCommands = lang === 'zh-CN' ? '主要命令' : 'Main commands';
+  const toolData = tools.map((tool) => ({
+    id: tool.id,
+    displayName: tool.displayName,
+    globalPath: tool.globalPaths?.[0] || '',
+    workspacePath: tool.primaryPaths[0] || '',
+  }));
+  const quickReferenceRows = [
+    { num: 1, name: t(lang, 'qrPrinciple1Title'), action: t(lang, 'qrPrinciple1Desc') },
+    { num: 2, name: t(lang, 'qrPrinciple2Title'), action: t(lang, 'qrPrinciple2Desc') },
+    { num: 3, name: t(lang, 'qrPrinciple3Title'), action: t(lang, 'qrPrinciple3Desc') },
+    { num: 4, name: t(lang, 'qrPrinciple4Title'), action: t(lang, 'qrPrinciple4Desc') },
+  ];
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #e4e4e7;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .dialog {
+      background: #1e1e2e;
+      border-radius: 16px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      max-width: 560px;
+      width: 100%;
+      overflow: hidden;
+      border: 1px solid #2d2d44;
+    }
+    .dialog-header {
+      background: linear-gradient(90deg, #6366f1, #8b5cf6);
+      padding: 24px 28px;
+      position: relative;
+      text-align: center;
+    }
+    .dialog-header h1 {
+      color: #fff;
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .dialog-header p {
+      color: rgba(255,255,255,0.8);
+      font-size: 14px;
+    }
+    .lang-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      margin-top: 12px;
+      background: rgba(255,255,255,0.1);
+      padding: 4px;
+      border-radius: 8px;
+      width: fit-content;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .lang-toggle button {
+      padding: 6px 14px;
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.6);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .lang-toggle button.active {
+      background: #fff;
+      color: #6366f1;
+    }
+    .header-actions {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      display: flex;
+      gap: 8px;
+    }
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      transition: background 0.2s;
+    }
+    .icon-btn:hover { background: rgba(255,255,255,0.2); }
+    .dialog-body {
+      padding: 24px 28px;
+    }
+    .select-all {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      background: #2a2a3e;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      cursor: pointer;
+    }
+    .select-all:hover { background: #323248; }
+    .select-all input { width: 18px; height: 18px; accent-color: #6366f1; }
+    .select-all span { font-weight: 500; }
+    .tools-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .tool-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: #252536;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 2px solid transparent;
+    }
+    .tool-item.checked {
+      background: #2b2b45;
+      border-color: #6366f1;
+    }
+    .tool-item.disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      border-color: transparent;
+    }
+    .tool-item:hover {
+      background: #2d2d42;
+      border-color: #3d3d5c;
+    }
+    .tool-item.disabled:hover {
+      background: #252536;
+      border-color: transparent;
+    }
+    .tool-item input {
+      width: 18px;
+      height: 18px;
+      accent-color: #6366f1;
+    }
+    .tool-name {
+      font-weight: 500;
+      color: #fff;
+      flex: 1;
+    }
+    .tool-path {
+      font-size: 12px;
+      color: #888;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+    .dialog-footer {
+      display: flex;
+      gap: 12px;
+      padding: 20px 28px 24px;
+    }
+    .btn {
+      flex: 1;
+      padding: 14px 20px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    .btn-cancel {
+      background: #3a3a50;
+      color: #a0a0b0;
+    }
+    .btn-cancel:hover { background: #4a4a60; }
+    .btn-install {
+      background: linear-gradient(90deg, #6366f1, #8b5cf6);
+      color: #fff;
+    }
+    .btn-install:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+    .btn-install:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+    .install-type {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .install-type button {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #3a3a50;
+      background: transparent;
+      color: #a0a0b0;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .install-type button.active {
+      border-color: #6366f1;
+      background: rgba(99, 102, 241, 0.1);
+      color: #fff;
+    }
+    .result-message {
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .result-message.success { color: #4ade80; }
+    .result-message.error { color: #f87171; }
+    .result-message h2 { font-size: 24px; margin-bottom: 12px; }
+    .result-message p { color: #888; margin-bottom: 20px; }
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 15, 29, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .modal-backdrop.visible { display: flex; }
+    .modal {
+      width: 100%;
+      max-width: 520px;
+      border-radius: 14px;
+      border: 1px solid #2d2d44;
+      background: #171725;
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px 14px;
+      border-bottom: 1px solid #2d2d44;
+    }
+    .modal-header h2 {
+      font-size: 16px;
+      color: #fff;
+    }
+    .modal-body {
+      padding: 18px 20px 20px;
+    }
+    .modal-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 16px;
+    }
+    .modal-table th, .modal-table td {
+      border: 1px solid #2d2d44;
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    .modal-table th {
+      background: #202036;
+      color: #a5b4fc;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .modal-card {
+      background: #202036;
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: #c9d1eb;
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+	  </style>
+</head>
+<body>
+  <div class="dialog">
+    <div class="dialog-header">
+      <div class="header-actions">
+        <button id="quickRefBtn" class="icon-btn" title="${quickReference}" aria-label="${quickReference}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"></path>
+          </svg>
+        </button>
+      </div>
+      <h1>${title}</h1>
+      <p>${subtitle}</p>
+      <div class="lang-toggle">
+        <button data-lang="auto" class="${langOpt === 'auto' ? 'active' : ''}">Auto</button>
+        <button data-lang="en" class="${langOpt === 'en' ? 'active' : ''}">EN</button>
+        <button data-lang="zh-CN" class="${langOpt === 'zh-CN' ? 'active' : ''}">中文</button>
+      </div>
+    </div>
+    <div class="dialog-body">
+      <div class="install-type">
+        <button class="${state.installType === 'global' ? 'active' : ''}" data-type="global">${installGlobal}</button>
+        <button class="${state.installType === 'workspace' ? 'active' : ''}" data-type="workspace">${installWorkspace}</button>
+      </div>
+      <label class="select-all">
+        <input type="checkbox" id="selectAll" />
+        <span>${selectAll}</span>
+      </label>
+      <div class="tools-list" id="toolsList"></div>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn btn-cancel" id="cancelBtn">${cancel}</button>
+      <button class="btn btn-install" id="installBtn" disabled>${install}</button>
+    </div>
+    <div class="modal-backdrop" id="quickRefModal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2>${quickReferenceTitle}</h2>
+          <button id="closeQuickRefBtn" class="icon-btn" aria-label="${quickReferenceClose}">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6 6 18"></path>
+              <path d="m6 6 12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <table class="modal-table">
+            <tr><th>#</th><th>${t(lang, 'qrPrinciple')}</th><th>${t(lang, 'qrKeyAction')}</th></tr>
+            ${quickReferenceRows.map((item) => `<tr><td>${item.num}</td><td><strong>${item.name}</strong></td><td>${item.action}</td></tr>`).join('')}
+          </table>
+          <div class="modal-card"><strong>${crossTool}</strong><br>${t(lang, 'qrCrossToolStrategy')}</div>
+          <div class="modal-card"><strong>${mainCommands}</strong><br>${t(lang, 'qrMainCommands')}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    window.onload = function() {
+      var vscode = acquireVsCodeApi();
+      var tools = ${JSON.stringify(toolData)};
+      var selectedTools = {};
+      var installType = ${JSON.stringify(state.installType)};
+      var hasWorkspace = ${JSON.stringify(Boolean(rootPath))};
+      var initialSelectedToolIds = ${JSON.stringify(state.selectedToolIds)};
+      var toolsList = document.getElementById('toolsList');
+      var selectAllEl = document.getElementById('selectAll');
+      var installBtn = document.getElementById('installBtn');
+      var quickRefModal = document.getElementById('quickRefModal');
+
+      function getAvailableTools() {
+        return tools.filter(function(tool) {
+          if (installType === 'global') {
+            return Boolean(tool.globalPath);
+          }
+          return hasWorkspace;
+        });
+      }
+
+      function getInstallPath(tool) {
+        if (installType === 'global') {
+          return tool.globalPath || ${JSON.stringify(unavailableGlobal)};
+        }
+        return hasWorkspace ? tool.workspacePath : ${JSON.stringify(workspaceMissing)};
+      }
+
+      function isSelectable(tool) {
+        if (installType === 'global') {
+          return Boolean(tool.globalPath);
+        }
+        return hasWorkspace;
+      }
+
+      function pruneSelectedTools() {
+        var availableIds = {};
+        getAvailableTools().forEach(function(tool) {
+          availableIds[tool.id] = true;
+        });
+        Object.keys(selectedTools).forEach(function(toolId) {
+          if (!availableIds[toolId]) {
+            delete selectedTools[toolId];
+          }
+        });
+      }
+
+      function renderTools() {
+        if (!toolsList) {
+          return;
+        }
+        toolsList.innerHTML = tools.map(function(tool) {
+          var checked = Boolean(selectedTools[tool.id]);
+          var selectable = isSelectable(tool);
+          var classes = 'tool-item' + (checked ? ' checked' : '') + (selectable ? '' : ' disabled');
+          return '<div class="' + classes + '" data-id="' + tool.id + '">' +
+            '<input type="checkbox" value="' + tool.id + '"' + (checked ? ' checked' : '') + (selectable ? '' : ' disabled') + ' />' +
+            '<span class="tool-name">' + tool.displayName + '</span>' +
+            '<span class="tool-path">' + getInstallPath(tool) + '</span>' +
+          '</div>';
+        }).join('');
+
+        var rows = toolsList.querySelectorAll('.tool-item');
+        for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+          rows[rowIndex].addEventListener('click', function(event) {
+            var checkbox = this.querySelector('input');
+            if (!checkbox || checkbox.disabled) {
+              return;
+            }
+            if (event.target !== checkbox) {
+              checkbox.checked = !checkbox.checked;
+              checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+          });
+        }
+
+        var checkboxes = toolsList.querySelectorAll('.tool-item input');
+        for (var checkboxIndex = 0; checkboxIndex < checkboxes.length; checkboxIndex++) {
+          checkboxes[checkboxIndex].addEventListener('change', function() {
+            var row = this.closest('.tool-item');
+            if (this.checked) {
+              selectedTools[this.value] = true;
+              if (row) {
+                row.classList.add('checked');
+              }
+            } else {
+              delete selectedTools[this.value];
+              if (row) {
+                row.classList.remove('checked');
+              }
+            }
+            updateSelectAll();
+            updateInstallBtn();
+          });
+        }
+      }
+
+      function updateInstallBtn() {
+        if (installBtn) {
+          installBtn.disabled = Object.keys(selectedTools).length === 0;
+        }
+      }
+
+      function updateSelectAll() {
+        if (selectAllEl) {
+          var available = getAvailableTools();
+          var selectedCount = available.filter(function(tool) { return Boolean(selectedTools[tool.id]); }).length;
+          selectAllEl.checked = available.length > 0 && selectedCount === available.length;
+          selectAllEl.indeterminate = selectedCount > 0 && selectedCount < available.length;
+        }
+      }
+
+      function setInstallType(nextType) {
+        installType = nextType;
+        pruneSelectedTools();
+        var typeBtns = document.querySelectorAll('.install-type button');
+        for (var btnIndex = 0; btnIndex < typeBtns.length; btnIndex++) {
+          var btn = typeBtns[btnIndex];
+          btn.classList.toggle('active', btn.getAttribute('data-type') === installType);
+        }
+        renderTools();
+        updateSelectAll();
+        updateInstallBtn();
+      }
+
+      initialSelectedToolIds.forEach(function(toolId) {
+        selectedTools[toolId] = true;
+      });
+      pruneSelectedTools();
+      renderTools();
+      updateSelectAll();
+      updateInstallBtn();
+
+      if (selectAllEl) {
+        selectAllEl.addEventListener('change', function() {
+          var available = getAvailableTools();
+          if (this.checked) {
+            available.forEach(function(tool) {
+              selectedTools[tool.id] = true;
+            });
+          } else {
+            available.forEach(function(tool) {
+              delete selectedTools[tool.id];
+            });
+          }
+          renderTools();
+          updateSelectAll();
+          updateInstallBtn();
+        });
+      }
+
+      var typeBtns = document.querySelectorAll('.install-type button');
+      for (var typeIndex = 0; typeIndex < typeBtns.length; typeIndex++) {
+        typeBtns[typeIndex].addEventListener('click', function() {
+          setInstallType(this.getAttribute('data-type'));
+        });
+      }
+
+      var langBtns = document.querySelectorAll('.lang-toggle button');
+      for (var langIndex = 0; langIndex < langBtns.length; langIndex++) {
+        langBtns[langIndex].addEventListener('click', function() {
+          vscode.postMessage({
+            command: 'setLanguage',
+            lang: this.getAttribute('data-lang'),
+            installType: installType,
+            selectedToolIds: Object.keys(selectedTools)
+          });
+        });
+      }
+
+      if (installBtn) {
+        installBtn.addEventListener('click', function() {
+          vscode.postMessage({
+            command: 'install',
+            toolIds: Object.keys(selectedTools),
+            installType: installType
+          });
+        });
+      }
+
+      var cancelBtn = document.getElementById('cancelBtn');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', function() {
+          vscode.postMessage({ command: 'cancel' });
+        });
+      }
+
+      var quickRefBtn = document.getElementById('quickRefBtn');
+      if (quickRefBtn && quickRefModal) {
+        quickRefBtn.addEventListener('click', function() {
+          quickRefModal.classList.add('visible');
+        });
+      }
+
+      var closeQuickRefBtn = document.getElementById('closeQuickRefBtn');
+      if (closeQuickRefBtn && quickRefModal) {
+        closeQuickRefBtn.addEventListener('click', function() {
+          quickRefModal.classList.remove('visible');
+        });
+        quickRefModal.addEventListener('click', function(event) {
+          if (event.target === quickRefModal) {
+            quickRefModal.classList.remove('visible');
+          }
+        });
+      }
+
+      // Handle messages from extension
+      window.addEventListener('message', function(event) {
+        if (event.data.command === 'showResult') {
+          var body = document.querySelector('.dialog-body');
+          if (event.data.success) {
+            body.innerHTML = '<div class="result-message success"><h2>' + event.data.title + '</h2><p>' + event.data.message + '</p></div>';
+          } else {
+            body.innerHTML = '<div class="result-message error"><h2>' + event.data.title + '</h2><p>' + event.data.message + '</p></div>';
+          }
+          document.querySelector('.dialog-footer').innerHTML = '<button class="btn btn-install" style="flex:1" id="closeBtn">OK</button>';
+          document.getElementById('closeBtn').onclick = function() {
+            vscode.postMessage({ command: 'close' });
+          };
+        }
+      });
+    };
+  </script>
+</body>
+</html>`;
+}
+
+async function showInstallDialog(initialType: InstallType = 'global', selectedToolIds: string[] = []): Promise<void> {
+  const config = vscode.workspace.getConfiguration('karpathyGuidelines');
+  let langOpt = config.get('language', 'auto') as LanguageOption;
+  const allTools = getAllTools();
+  const rootPath = getWorkspaceRoot();
+  const initialState: InstallDialogState = { installType: initialType, selectedToolIds };
+
+  if (installDialogPanel) {
+    installDialogPanel.reveal();
+    installDialogPanel.title = resolveLanguage(langOpt) === 'zh-CN' ? '安装 Karpathy 行为准则' : 'Install Karpathy Guidelines';
+    installDialogPanel.webview.html = buildInstallDialogHtml(langOpt, allTools, rootPath, initialState);
+    return;
+  }
+
+  const resolvedLang = resolveLanguage(langOpt);
+  const panel = vscode.window.createWebviewPanel(
+    'karpathyInstall',
+    resolvedLang === 'zh-CN' ? '安装 Karpathy 行为准则' : 'Install Karpathy Guidelines',
+    vscode.ViewColumn.One,
+    { enableScripts: true, retainContextWhenHidden: true }
+  );
+  installDialogPanel = panel;
+
+  panel.webview.html = buildInstallDialogHtml(langOpt, allTools, rootPath, initialState);
+
+  panel.webview.onDidReceiveMessage(async (message) => {
+    if (message.command === 'cancel' || message.command === 'close') {
+      panel.dispose();
+      installDialogPanel = undefined;
+      return;
+    }
+
+    if (message.command === 'setLanguage') {
+      langOpt = message.lang as LanguageOption;
+      await config.update('language', langOpt, vscode.ConfigurationTarget.Global);
+      panel.title = resolveLanguage(langOpt) === 'zh-CN' ? '安装 Karpathy 行为准则' : 'Install Karpathy Guidelines';
+      panel.webview.html = buildInstallDialogHtml(langOpt, allTools, rootPath, {
+        installType: (message.installType as InstallType) || initialType,
+        selectedToolIds: Array.isArray(message.selectedToolIds) ? message.selectedToolIds : [],
+      });
+      return;
+    }
+
+    if (message.command === 'install') {
+      const cfg = vscode.workspace.getConfiguration('karpathyGuidelines');
+      const overwriteExisting = cfg.get('overwriteExisting', true) as boolean;
+      const installLang = resolveLanguage(langOpt);
+      const toolIds = Array.isArray(message.toolIds) ? message.toolIds as string[] : [];
+      const installType = (message.installType as InstallType) || 'global';
+
+      if (installType === 'workspace') {
+        const workspaceRoot = getWorkspaceRoot();
+        if (!workspaceRoot) {
+          panel.webview.postMessage({
+            command: 'showResult',
+            success: false,
+            title: installLang === 'zh-CN' ? '未打开工作区' : 'No Workspace Open',
+            message: installLang === 'zh-CN' ? '请先打开工作区文件夹，然后再安装到工作区。' : 'Open a workspace folder before installing workspace configs.'
+          });
+          return;
+        }
+
+        const report = await generateConfigsForTools(workspaceRoot, toolIds, { overwriteExisting }, installLang);
+        const created = report.allFiles.filter((file) => file.status === 'created' || file.status === 'updated').length;
+        const skipped = report.allFiles.filter((file) => file.status === 'skipped').length;
+        const unchanged = report.allFiles.filter((file) => file.status === 'unchanged').length;
+        const errors = report.allFiles.filter((file) => file.status === 'error').length;
+
+        let title;
+        let msg;
+        if (errors > 0) {
+          title = installLang === 'zh-CN' ? '安装失败' : 'Install Failed';
+          msg = installLang === 'zh-CN' ? `${errors} 个文件写入失败` : `${errors} file(s) failed to write`;
+        } else if (created === 0 && skipped === 0 && unchanged > 0) {
+          title = installLang === 'zh-CN' ? '已是最新' : 'Up to Date';
+          msg = installLang === 'zh-CN' ? `工作区中的 ${unchanged} 个配置已是最新` : `${unchanged} workspace config(s) are already up to date`;
+        } else {
+          title = installLang === 'zh-CN' ? '安装成功' : 'Install Success';
+          msg = installLang === 'zh-CN'
+            ? `工作区中已写入 ${created} 个配置，${skipped} 个跳过，${unchanged} 个已是最新`
+            : `Wrote ${created} workspace config(s), skipped ${skipped}, ${unchanged} up to date`;
+        }
+
+        panel.webview.postMessage({
+          command: 'showResult',
+          success: errors === 0,
+          title,
+          message: msg
+        });
+        return;
+      }
+
+      const results = await installGlobal(toolIds, { overwriteExisting }, installLang);
+
+      const created = results.filter(r => r.status === 'created' || r.status === 'updated').length;
+      const skipped = results.filter(r => r.status === 'skipped').length;
+      const unchanged = results.filter(r => r.status === 'unchanged').length;
+      const errors = results.filter(r => r.status === 'error').length;
+
+      let title, msg;
+      if (errors > 0) {
+        title = installLang === 'zh-CN' ? '安装失败' : 'Install Failed';
+        msg = installLang === 'zh-CN' ? `${errors} 个错误` : `${errors} error(s)`;
+      } else if (created === 0 && skipped === 0 && unchanged > 0) {
+        title = installLang === 'zh-CN' ? '已是最新' : 'Up to Date';
+        msg = installLang === 'zh-CN' ? `所有 ${unchanged} 个配置已是最新` : `All ${unchanged} configs are up to date`;
+      } else {
+        title = installLang === 'zh-CN' ? '安装成功' : 'Install Success';
+        msg = installLang === 'zh-CN'
+          ? `已安装 ${created} 个配置，${skipped} 个跳过，${unchanged} 个已是最新`
+          : `Installed ${created}, skipped ${skipped}, ${unchanged} up to date`;
+      }
+
+      panel.webview.postMessage({
+        command: 'showResult',
+        success: errors === 0,
+        title,
+        message: msg
+      });
+    }
+  });
+
+  panel.onDidDispose(() => {
+    installDialogPanel = undefined;
+  });
+}
+
+async function maybeShowInstallDialogAfterInstall(context: vscode.ExtensionContext): Promise<void> {
+  const version = String(context.extension.packageJSON.version || 'unknown');
+  const shownVersion = context.globalState.get<string>(INSTALL_DIALOG_SHOWN_VERSION_KEY);
+  if (shownVersion === version) {
+    return;
+  }
+
+  await context.globalState.update(INSTALL_DIALOG_SHOWN_VERSION_KEY, version);
+  setTimeout(() => {
+    if (!installDialogPanel) {
+      void showInstallDialog('global');
+    }
+  }, 500);
+}
+
 async function showGenerationReport(
   rootPath: string,
   toolIds: string[],
@@ -453,65 +1205,20 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   const installGlobalCommand = vscode.commands.registerCommand('karpathy-guidelines.installGlobal', async () => {
-    const lang = getCurrentLanguage();
-    const allTools = getAllTools();
-    const cliTools = allTools.filter(t => t.type === 'cli');
+    await showInstallDialog('global');
+  });
 
-    const selected = await vscode.window.showQuickPick(
-      cliTools.map(tool => ({
-        label: tool.displayName,
-        description: getGlobalPaths(tool.id)[0] || '',
-        tool
-      })),
-      { canPickMany: true, placeHolder: 'Select tools to install globally' }
-    );
+  const installWorkspaceCommand = vscode.commands.registerCommand('karpathy-guidelines.installWorkspace', async () => {
+    await showInstallDialog('workspace');
+  });
 
-    if (!selected || selected.length === 0) { return; }
-
-    const config = vscode.workspace.getConfiguration('karpathyGuidelines');
-    const overwrite = config.get('overwriteExisting', false) as boolean;
-
-    const results = await installGlobal(
-      selected.map((item: GlobalToolQuickPickItem) => item.tool.id),
-      { overwriteExisting: overwrite },
-      lang
-    );
-
-    const created = results.filter(r => r.status === 'created' || r.status === 'updated');
-    const skipped = results.filter(r => r.status === 'skipped');
-    const errors = results.filter(r => r.status === 'error');
-
-    if (errors.length > 0) {
-      vscode.window.showErrorMessage(`Failed to install ${errors.length} global configs`);
-    }
-
-    const message = errors.length > 0
-      ? `Installed ${created.length}, skipped ${skipped.length}, ${errors.length} failed`
-      : `Installed ${created.length} global config(s)`;
-
-    vscode.window.showInformationMessage(message);
+  const installLocalCommand = vscode.commands.registerCommand('karpathy-guidelines.installLocal', async () => {
+    await showInstallDialog('workspace');
   });
 
   const installGlobalAllCommand = vscode.commands.registerCommand('karpathy-guidelines.installGlobalAll', async () => {
-    const lang = getCurrentLanguage();
     const allTools = getAllTools();
-    const cliTools = allTools.filter(t => t.type === 'cli' && t.id !== 'copilot-cli');
-
-    const config = vscode.workspace.getConfiguration('karpathyGuidelines');
-    const overwrite = config.get('overwriteExisting', false) as boolean;
-
-    await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Installing global configs...', cancellable: false },
-      async () => {
-        const results = await installGlobal(cliTools.map(t => t.id), { overwriteExisting: overwrite }, lang);
-
-        const created = results.filter(r => r.status === 'created' || r.status === 'updated').length;
-        const skipped = results.filter(r => r.status === 'skipped').length;
-        const errors = results.filter(r => r.status === 'error').length;
-
-        vscode.window.showInformationMessage(`Installed ${created} global configs, ${skipped} skipped, ${errors} errors`);
-      }
-    );
+    await showInstallDialog('global', getInstallableToolIds('global', allTools, getWorkspaceRoot()));
   });
 
   const autoActivateListener = vscode.workspace.onDidOpenTextDocument(async (document: any) => {
@@ -535,9 +1242,13 @@ export function activate(context: vscode.ExtensionContext): void {
     listToolsCommand,
     checkConfigsCommand,
     installGlobalCommand,
+    installWorkspaceCommand,
+    installLocalCommand,
     installGlobalAllCommand,
     autoActivateListener
   );
+
+  void maybeShowInstallDialogAfterInstall(context);
 }
 
 export function deactivate(): void {}

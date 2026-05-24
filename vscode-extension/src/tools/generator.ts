@@ -223,10 +223,16 @@ export async function installGlobal(toolIds: string[], options: ConfigGeneration
 
     // Use the first global path
     const globalPath = expandHome(globalPaths[0]);
+    const globalBasename = path.basename(globalPath);
     const generatedFiles = tool.buildFiles(lang);
+
+    // Find matching file:
+    // 1) Exact relativePath match (e.g., "CLAUDE.md" === "CLAUDE.md")
+    // 2) Basename match (e.g., basename of "path/to/CLAUDE.md" === "CLAUDE.md")
+    // Falls back to first generated file (should be the main config like AGENTS.md)
     const matchingFile =
-      generatedFiles.find((file) => file.relativePath === path.basename(globalPath)) ||
-      generatedFiles.find((file) => path.basename(file.relativePath) === path.basename(globalPath)) ||
+      generatedFiles.find((file) => file.relativePath === globalBasename) ||
+      generatedFiles.find((file) => path.basename(file.relativePath) === globalBasename) ||
       generatedFiles[0];
     const content = matchingFile?.content || '';
 
