@@ -198,7 +198,7 @@ export interface GlobalInstallResult {
   error?: string;
 }
 
-export async function installGlobal(toolIds: string[], options: ConfigGenerationOptions): Promise<GlobalInstallResult[]> {
+export async function installGlobal(toolIds: string[], options: ConfigGenerationOptions, lang: Language = 'en'): Promise<GlobalInstallResult[]> {
   const results: GlobalInstallResult[] = [];
 
   for (const toolId of toolIds) {
@@ -218,7 +218,7 @@ export async function installGlobal(toolIds: string[], options: ConfigGeneration
 
     // Use the first global path
     const globalPath = expandHome(globalPaths[0]);
-    const content = tool.buildFiles()[0]?.content || '';
+    const content = tool.buildFiles(lang)[0]?.content || '';
 
     try {
       const exists = await pathExists(globalPath);

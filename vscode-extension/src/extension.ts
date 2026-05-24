@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
-import { GUIDELINES_CONTENT, QUICK_REFERENCE } from './guidelines';
+import { GUIDELINES_CONTENT } from './guidelines';
+import { Language, LanguageOption, resolveLanguage } from './i18n';
+import { t } from './i18n';
 import {
   detectTools,
   generateConfigsForTools,
@@ -20,12 +22,19 @@ interface ToolQuickPickItem {
   tool: ToolConfig;
 }
 
+const CONFIG_BASE = 'karpathyGuidelines';
+
 function getWorkspaceRoot(uri?: vscode.Uri): string {
   if (uri?.fsPath) {
     return uri.fsPath;
   }
-
   return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+}
+
+function getCurrentLanguage(): Language {
+  const config = vscode.workspace.getConfiguration(CONFIG_BASE);
+  const option = config.get<LanguageOption>('language', 'auto');
+  return resolveLanguage(option);
 }
 
 async function openMarkdownDocument(content: string): Promise<void> {
@@ -132,12 +141,14 @@ ${rows}
 `;
 }
 
-function buildQuickRefHtml(): string {
+function buildQuickRefHtml(lang: Language): string {
+  const str = (key: 'qrTitle' | 'qrPrinciple' | 'qrKeyAction' | 'qrPrinciple1Title' | 'qrPrinciple1Desc' | 'qrPrinciple2Title' | 'qrPrinciple2Desc' | 'qrPrinciple3Title' | 'qrPrinciple3Desc' | 'qrPrinciple4Title' | 'qrPrinciple4Desc' | 'qrCrossToolStrategy' | 'qrMainCommands') => t(lang, key);
+
   const principles = [
-    { num: 1, name: 'Think Before Coding', action: 'State assumptions, ask if unclear' },
-    { num: 2, name: 'Simplicity First', action: 'Minimum code, no speculative features' },
-    { num: 3, name: 'Surgical Changes', action: 'Only touch what you must' },
-    { num: 4, name: 'Goal-Driven', action: 'Define success criteria, verify each step' },
+    { num: 1, name: str('qrPrinciple1Title'), action: str('qrPrinciple1Desc') },
+    { num: 2, name: str('qrPrinciple2Title'), action: str('qrPrinciple2Desc') },
+    { num: 3, name: str('qrPrinciple3Title'), action: str('qrPrinciple3Desc') },
+    { num: 4, name: str('qrPrinciple4Title'), action: str('qrPrinciple4Desc') },
   ];
 
   const tableRows = principles.map(p => `
@@ -182,20 +193,20 @@ function buildQuickRefHtml(): string {
   </style>
 </head>
 <body>
-  <h1>Karpathy Guidelines - Quick Reference</h1>
+  <h1>${str('qrTitle')}</h1>
 
   <table>
-    <tr><th>#</th><th>Principle</th><th>Key Action</th></tr>
+    <tr><th>#</th><th>${str('qrPrinciple')}</th><th>${str('qrKeyAction')}</th></tr>
     ${tableRows}
   </table>
 
   <div class="card">
-    <strong>Cross-tool strategy</strong>
-    <p>Use <code>AGENTS.md</code> as the shared source of truth, then generate tool-specific entrypoints only for tools that need them.</p>
+    <strong>Cross-tool</strong>
+    <p>${str('qrCrossToolStrategy')}</p>
   </div>
   <div class="card">
     <strong>Main commands</strong>
-    <p><code>Create Configs for Selected Tools</code>, <code>Create Detected Tool Configs</code>, <code>Create All Configs</code>, and <code>Check Workspace Configs</code>.</p>
+    <p>${str('qrMainCommands')}</p>
   </div>
 </body>
 </html>`;
@@ -206,9 +217,10 @@ async function showGenerationReport(
   toolIds: string[],
   note?: string
 ): Promise<void> {
+  const lang = getCurrentLanguage();
   const config = vscode.workspace.getConfiguration('karpathyGuidelines');
   const overwriteExisting = config.get('overwriteExisting', false) as boolean;
-  const report = await generateConfigsForTools(rootPath, toolIds, { overwriteExisting });
+  const report = await generateConfigsForTools(rootPath, toolIds, { overwriteExisting }, lang);
 
   const createdOrUpdated = report.allFiles.filter((file) => file.status === 'created' || file.status === 'updated');
   const skipped = report.allFiles.filter((file) => file.status === 'skipped');
@@ -276,7 +288,7 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.ViewColumn.Beside,
       { retainContextWhenHidden: true }
     );
-    panel.webview.html = buildQuickRefHtml();
+    panel.webview.html = buildQuickRefHtml(getCurrentLanguage());
   });
 
   const insertCommand = vscode.commands.registerCommand('karpathy-guidelines.insertRules', async () => {
@@ -378,6 +390,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   const installGlobalCommand = vscode.commands.registerCommand('karpathy-guidelines.installGlobal', async () => {
+    const lang = getCurrentLanguage();
     const allTools = getAllTools();
     const cliTools = allTools.filter(t => t.type === 'cli');
 
@@ -395,7 +408,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const config = vscode.workspace.getConfiguration('karpathyGuidelines');
     const overwrite = config.get('overwriteExisting', false) as boolean;
 
-    const results = await installGlobal(selected.map(s => s.tool.id), { overwriteExisting: overwrite });
+    const results = await installGlobal(selected.map(s => s.tool.id), { overwriteExisting: overwrite }, lang);
 
     const created = results.filter(r => r.status === 'created' || r.status === 'updated');
     const skipped = results.filter(r => r.status === 'skipped');
@@ -413,6 +426,7 @@ export function activate(context: vscode.ExtensionContext): void {
   });
 
   const installGlobalAllCommand = vscode.commands.registerCommand('karpathy-guidelines.installGlobalAll', async () => {
+    const lang = getCurrentLanguage();
     const allTools = getAllTools();
     const cliTools = allTools.filter(t => t.type === 'cli' && t.id !== 'copilot-cli');
 
@@ -422,7 +436,7 @@ export function activate(context: vscode.ExtensionContext): void {
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'Installing global configs...', cancellable: false },
       async () => {
-        const results = await installGlobal(cliTools.map(t => t.id), { overwriteExisting: overwrite });
+        const results = await installGlobal(cliTools.map(t => t.id), { overwriteExisting: overwrite }, lang);
 
         const created = results.filter(r => r.status === 'created' || r.status === 'updated').length;
         const skipped = results.filter(r => r.status === 'skipped').length;
