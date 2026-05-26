@@ -60,7 +60,7 @@ export const TOOLS: Record<string, ToolConfig> = {
     description: 'Gemini project context with AGENTS.md as the shared source',
     website: 'https://github.com/google-gemini/gemini-cli',
     primaryPaths: ['GEMINI.md', '.gemini/settings.json'],
-    globalPaths: ['~/.gemini/settings.json'],
+    globalPaths: ['~/.gemini/GEMINI.md'],
     detectMarkers: ['GEMINI.md', '.gemini', '.gemini/settings.json'],
     buildFiles: (lang: Language) => [
       sharedAgentsFile(lang),

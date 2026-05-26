@@ -1,5 +1,8 @@
 # Local secrets
 .env.github
+.env
+test-claude-md/.env
 
 # Local build helper
 build-vsix.sh
+test-claude-md/

@@ -182,29 +182,20 @@ export function buildClaudeContent(lang: Language): string {
 }
 
 export function buildGeminiContent(lang: Language): string {
+  const body = getGuidelinesBody(lang);
   if (lang === 'zh-CN') {
     return `# Gemini CLI 项目上下文
 
-从 \`AGENTS.md\` 加载共享的仓库指令。
+项目级和行为准则存储在 \`AGENTS.md\` 中。当 \`GEMINI.md\` 被安装到全局路径时，以下准则内联于此。
 
-@AGENTS.md
-
-## Gemini 注意事项
-
-- 使用 \`AGENTS.md\` 作为规范的项目指导。
-- 仅在此处保留仅适用于 Gemini 的注意事项。
+${body}
 `;
   }
   return `# Gemini CLI Project Context
 
-Load the shared repository instructions from \`AGENTS.md\`.
+The project-level behavioral guidelines are stored in \`AGENTS.md\`. When \`GEMINI.md\` is installed globally, the guidelines are inlined here.
 
-@AGENTS.md
-
-## Gemini Notes
-
-- Use \`AGENTS.md\` as the canonical project guidance.
-- Keep Gemini-specific notes here only when they do not apply to other tools.
+${body}
 `;
 }
 
