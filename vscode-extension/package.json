@@ -1,8 +1,8 @@
 {
   "name": "karpathy-guidelines",
-  "displayName": "Karpathy Guidelines",
-  "description": "Apply Andrej Karpathy's behavioral guidelines across Claude Code, Codex, OpenCode, Gemini CLI, Cursor, Windsurf, Copilot, Cline, Continue, and Aider.",
-  "version": "1.1.4",
+  "displayName": "AI Skill Installer",
+  "description": "Discover popular GitHub AI skills and install them across Claude Code, Codex, OpenCode, Gemini CLI, Cursor, Windsurf, Copilot, Cline, Continue, and Aider.",
+  "version": "1.1.5",
   "publisher": "benpay",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -32,6 +32,10 @@
     "LLM",
     "AI",
     "karpathy",
+    "skills",
+    "skill",
+    "installer",
+    "github",
     "claude",
     "cursor",
     "copilot",
@@ -63,72 +67,72 @@
     "commands": [
       {
         "command": "karpathy-guidelines.show",
-        "title": "Karpathy: Show Rules",
-        "description": "Display the full behavioral guidelines in a new tab"
+        "title": "AI Skills: Show Selected Skill",
+        "description": "Display the selected skill in a new tab"
       },
       {
         "command": "karpathy-guidelines.quickRef",
-        "title": "Karpathy: Quick Reference",
-        "description": "Open the quick reference panel with four principles"
+        "title": "AI Skills: Quick Reference",
+        "description": "Open the quick reference panel"
       },
       {
         "command": "karpathy-guidelines.insertRules",
-        "title": "Karpathy: Insert into Current File",
-        "description": "Insert guidelines at cursor position (as comments or markdown)"
+        "title": "AI Skills: Insert Selected Skill",
+        "description": "Insert the selected skill at cursor position (as comments or markdown)"
       },
       {
         "command": "karpathy-guidelines.createConfig",
-        "title": "Karpathy: Create Configs for Selected Tools",
+        "title": "AI Skills: Create Configs for Selected Tools",
         "description": "Generate config files for one or more selected AI coding tools"
       },
       {
         "command": "karpathy-guidelines.createDetectedConfigs",
-        "title": "Karpathy: Create Detected Tool Configs",
+        "title": "AI Skills: Create Detected Tool Configs",
         "description": "Detect AI tools from the workspace and generate compatible config files"
       },
       {
         "command": "karpathy-guidelines.createAllConfigs",
-        "title": "Karpathy: Create All Supported Configs",
+        "title": "AI Skills: Create All Supported Configs",
         "description": "Generate config files for every supported AI coding tool"
       },
       {
         "command": "karpathy-guidelines.listTools",
-        "title": "Karpathy: List Supported Tools",
+        "title": "AI Skills: List Supported Tools",
         "description": "Show supported AI coding tools and the files generated for them"
       },
       {
         "command": "karpathy-guidelines.checkConfigs",
-        "title": "Karpathy: Check Workspace Configs",
+        "title": "AI Skills: Check Workspace Configs",
         "description": "Check which config files exist in the current workspace"
       },
       {
         "command": "karpathy-guidelines.installGlobal",
-        "title": "Karpathy: Install Global Skills",
+        "title": "AI Skills: Install Global Skills",
         "description": "Install the selected skill to global skill folders for selected CLI tools"
       },
       {
         "command": "karpathy-guidelines.installWorkspace",
-        "title": "Karpathy: Install Workspace Skill",
+        "title": "AI Skills: Install Workspace Skill",
         "description": "Open the install dialog and write the selected skill into the current workspace"
       },
       {
         "command": "karpathy-guidelines.installLocal",
-        "title": "Karpathy: Install Local Skill",
+        "title": "AI Skills: Install Local Skill",
         "description": "Open the install dialog and write the selected skill into the current workspace"
       },
       {
         "command": "karpathy-guidelines.installGlobalAll",
-        "title": "Karpathy: Install All Global Skills",
+        "title": "AI Skills: Install All Global Skills",
         "description": "Open the install dialog with every globally installable tool selected"
       },
       {
         "command": "karpathy-guidelines.openSettings",
-        "title": "Karpathy: Open Settings",
-        "description": "Open the Karpathy install and configuration dialog"
+        "title": "AI Skills: Open Installer",
+        "description": "Open the AI skill install and configuration dialog"
       },
       {
         "command": "karpathy-guidelines.refreshSkills",
-        "title": "Karpathy: Refresh Popular AI Skills",
+        "title": "AI Skills: Refresh Popular GitHub Skills",
         "description": "Fetch popular GitHub AI skill repositories updated in the last 30 days"
       }
     ],
@@ -204,7 +208,7 @@
       ]
     },
     "configuration": {
-      "title": "Karpathy Guidelines",
+      "title": "AI Skill Installer",
       "properties": {
         "karpathyGuidelines.insertAs": {
           "type": "string",
@@ -219,7 +223,7 @@
         "karpathyGuidelines.autoActivate": {
           "type": "boolean",
           "default": false,
-          "description": "Show quick reference when opening markdown files"
+          "description": "Show quick reference when opening Markdown files"
         },
         "karpathyGuidelines.defaultTool": {
           "type": "string",
