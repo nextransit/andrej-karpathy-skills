@@ -7,3 +7,4 @@ test-claude-md/.env
 build-vsix.sh
 test-claude-md/
 .codegraph/
+.cursor/
