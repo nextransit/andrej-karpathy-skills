@@ -1,8 +1,8 @@
 {
   "name": "karpathy-guidelines",
   "displayName": "Karpathy Guidelines",
-  "description": "Apply Andrej Karpathy's behavioral guidelines across Claude Code, Codex, Gemini CLI, Cursor, Windsurf, Copilot, Cline, Continue, and Aider.",
-  "version": "1.1.3",
+  "description": "Apply Andrej Karpathy's behavioral guidelines across Claude Code, Codex, OpenCode, Gemini CLI, Cursor, Windsurf, Copilot, Cline, Continue, and Aider.",
+  "version": "1.1.4",
   "publisher": "benpay",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -55,7 +55,8 @@
     "onCommand:karpathy-guidelines.installWorkspace",
     "onCommand:karpathy-guidelines.installLocal",
     "onCommand:karpathy-guidelines.installGlobalAll",
-    "onCommand:karpathy-guidelines.openSettings"
+    "onCommand:karpathy-guidelines.openSettings",
+    "onCommand:karpathy-guidelines.refreshSkills"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -102,28 +103,33 @@
       },
       {
         "command": "karpathy-guidelines.installGlobal",
-        "title": "Karpathy: Install Global Configs",
-        "description": "Install global configs for selected CLI tools to ~/.claude, ~/.codex, etc."
+        "title": "Karpathy: Install Global Skills",
+        "description": "Install the selected skill to global skill folders for selected CLI tools"
       },
       {
         "command": "karpathy-guidelines.installWorkspace",
-        "title": "Karpathy: Install Workspace Configs",
-        "description": "Open the install dialog and write selected tool configs into the current workspace"
+        "title": "Karpathy: Install Workspace Skill",
+        "description": "Open the install dialog and write the selected skill into the current workspace"
       },
       {
         "command": "karpathy-guidelines.installLocal",
-        "title": "Karpathy: Install Local Configs",
-        "description": "Open the install dialog and write selected tool configs into the current workspace"
+        "title": "Karpathy: Install Local Skill",
+        "description": "Open the install dialog and write the selected skill into the current workspace"
       },
       {
         "command": "karpathy-guidelines.installGlobalAll",
-        "title": "Karpathy: Install All Global Configs",
+        "title": "Karpathy: Install All Global Skills",
         "description": "Open the install dialog with every globally installable tool selected"
       },
       {
         "command": "karpathy-guidelines.openSettings",
         "title": "Karpathy: Open Settings",
         "description": "Open the Karpathy install and configuration dialog"
+      },
+      {
+        "command": "karpathy-guidelines.refreshSkills",
+        "title": "Karpathy: Refresh Popular AI Skills",
+        "description": "Fetch popular GitHub AI skill repositories updated in the last 30 days"
       }
     ],
     "menus": {
@@ -191,6 +197,9 @@
         },
         {
           "command": "karpathy-guidelines.openSettings"
+        },
+        {
+          "command": "karpathy-guidelines.refreshSkills"
         }
       ]
     },
@@ -218,6 +227,7 @@
           "enum": [
             "claude-code",
             "codex",
+            "opencode",
             "gemini-cli",
             "aider",
             "cursor",
@@ -227,6 +237,11 @@
             "continue"
           ],
           "description": "Default tool preselected in the target picker"
+        },
+        "karpathyGuidelines.defaultSkill": {
+          "type": "string",
+          "default": "karpathy-guidelines",
+          "description": "Default AI skill selected in the install dialog. Karpathy Guidelines remains the fallback when GitHub skills cannot be fetched."
         },
         "karpathyGuidelines.overwriteExisting": {
           "type": "boolean",

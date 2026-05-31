@@ -1,14 +1,26 @@
 import * as fs from 'fs';
 import * as vscode from 'vscode';
-import { GUIDELINES_CONTENT } from './guidelines';
+import { buildGuidelinesContent } from './guidelines';
 import { Language, LanguageOption, resolveLanguage } from './i18n';
 import { t } from './i18n';
+import {
+  discoverPopularSkills,
+  getSkillById,
+  getSkillBody,
+  getSkillDescription,
+  getSkillDisplayName,
+  KARPATHY_SKILL,
+} from './skills';
 import {
   detectTools,
   generateConfigsForTools,
   getAllTools,
+  getGlobalSkillPathForTool,
   getRecommendedToolIds,
-  installGlobal,
+  getWorkspaceSkillRelativePath,
+  InstructionSkill,
+  installGlobalSkills,
+  installWorkspaceSkill,
   inspectWorkspace,
   ToolConfig,
   WorkspaceToolStatus,
@@ -27,10 +39,27 @@ type InstallType = 'global' | 'workspace';
 interface InstallDialogState {
   installType: InstallType;
   selectedToolIds: string[];
+  selectedSkillId?: string;
 }
 
 const CONFIG_BASE = 'karpathyGuidelines';
 const INSTALL_DIALOG_SHOWN_INSTALL_ID_KEY = 'karpathyGuidelines.installDialogShownInstallId';
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function jsonForScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+}
 
 function getWorkspaceRoot(uri?: vscode.Uri): string {
   if (uri?.fsPath) {
@@ -82,11 +111,12 @@ function getCommentPrefix(languageId: string): string {
   return prefixes[languageId] || '# ';
 }
 
-function buildGenerationMarkdown(rootPath: string, toolIds: string[], report: Awaited<ReturnType<typeof generateConfigsForTools>>, note?: string, lang: Language = 'en'): string {
+function buildGenerationMarkdown(rootPath: string, toolIds: string[], report: Awaited<ReturnType<typeof generateConfigsForTools>>, note?: string, lang: Language = 'en', skill: InstructionSkill = KARPATHY_SKILL): string {
   const str = (key: string) => {
     const translations: Record<string, Record<Language, string>> = {
       'title': { en: 'Karpathy Config Generation', 'zh-CN': 'Karpathy 配置生成' },
       'targetPath': { en: 'Target path', 'zh-CN': '目标路径' },
+      'skill': { en: 'Skill', 'zh-CN': 'Skill' },
       'generatedFor': { en: 'Generated for', 'zh-CN': '为以下工具生成' },
       'fileResults': { en: 'File Results', 'zh-CN': '文件结果' },
       'status': { en: 'Status', 'zh-CN': '状态' },
@@ -116,9 +146,11 @@ function buildGenerationMarkdown(rootPath: string, toolIds: string[], report: Aw
     .map((result) => `| ${result.tool.displayName} | ${str(result.tool.type)} | ${result.files.map((file) => `\`${file.relativePath}\``).join('<br>')} |`)
     .join('\n');
 
-  return `# ${str('title')}
+  return `# ${getSkillDisplayName(skill, lang)} ${str('title')}
 
 ${str('targetPath')}: \`${rootPath}\`
+
+${str('skill')}: ${getSkillDescription(skill, lang)}
 
 ${str('generatedFor')}: ${toolIds.join(', ')}
 ${note ? `\n${note}\n` : ''}
@@ -135,6 +167,16 @@ ${fileRows || `| - | - | ${str('noFiles')} |`}
 |---|---|---|
 ${toolRows || '| - | - | - |'}
 `;
+}
+
+async function getSelectedSkillFromConfig(): Promise<InstructionSkill> {
+  const config = vscode.workspace.getConfiguration(CONFIG_BASE);
+  const skillId = config.get('defaultSkill', KARPATHY_SKILL.id) as string;
+  if (skillId === KARPATHY_SKILL.id) {
+    return KARPATHY_SKILL;
+  }
+  const skills = await getDiscoveredSkills();
+  return getSkillById(skills, skillId);
 }
 
 function buildSupportedToolsMarkdown(tools: ToolConfig[], lang: Language = 'en'): string {
@@ -276,6 +318,7 @@ function buildQuickRefHtml(lang: Language): string {
 }
 
 let installDialogPanel: vscode.WebviewPanel | undefined;
+let discoveredSkillsCache: InstructionSkill[] | undefined;
 
 function getInstallableToolIds(installType: InstallType, tools: ToolConfig[], rootPath: string): string[] {
   if (installType === 'global') {
@@ -285,17 +328,68 @@ function getInstallableToolIds(installType: InstallType, tools: ToolConfig[], ro
   return rootPath ? tools.map((tool) => tool.id) : [];
 }
 
+async function getDiscoveredSkills(forceRefresh: boolean = false): Promise<InstructionSkill[]> {
+  if (forceRefresh) {
+    discoveredSkillsCache = undefined;
+  }
+  if (!discoveredSkillsCache) {
+    discoveredSkillsCache = await discoverPopularSkills();
+  }
+  return discoveredSkillsCache;
+}
+
+function getInstallPanelTitle(skill: InstructionSkill, lang: Language): string {
+  const skillName = getSkillDisplayName(skill, lang);
+  return lang === 'zh-CN' ? `安装 ${skillName}` : `Install ${skillName}`;
+}
+
+function getPopularityLevel(skill: InstructionSkill, skills: InstructionSkill[]): number | undefined {
+  if (skill.source !== 'github') {
+    return undefined;
+  }
+
+  const rankedSkills = skills
+    .filter((candidate) => candidate.source === 'github')
+    .sort((left, right) => (right.stars || 0) - (left.stars || 0));
+  const rank = rankedSkills.findIndex((candidate) => candidate.id === skill.id);
+
+  if (rank === -1 || rankedSkills.length === 0) {
+    return 1;
+  }
+
+  return Math.max(1, 5 - Math.floor((rank * 5) / rankedSkills.length));
+}
+
+function buildPopularityBadge(level: number | undefined): string {
+  if (!level) {
+    return '';
+  }
+  return `${'★'.repeat(level)}${'☆'.repeat(5 - level)}`;
+}
+
 function buildInstallDialogHtml(
   langOpt: LanguageOption,
   tools: ToolConfig[],
+  skills: InstructionSkill[],
   rootPath: string,
-  state: InstallDialogState = { installType: 'global', selectedToolIds: [] }
+  state: InstallDialogState = { installType: 'global', selectedToolIds: [], selectedSkillId: KARPATHY_SKILL.id }
 ): string {
   const lang = resolveLanguage(langOpt);
-  const title = lang === 'zh-CN' ? '安装 Karpathy 行为准则' : 'Install Karpathy Guidelines';
+  const selectedSkill = getSkillById(skills, state.selectedSkillId);
+  const selectedSkillName = getSkillDisplayName(selectedSkill, lang);
+  const selectedSkillDescription = getSkillDescription(selectedSkill, lang);
+  const title = lang === 'zh-CN' ? `安装 ${selectedSkillName}` : `Install ${selectedSkillName}`;
   const subtitle = lang === 'zh-CN'
-    ? '为 AI 编码工具安装全局配置或工作区配置'
-    : 'Install global or workspace configs for AI coding tools';
+    ? selectedSkillDescription
+    : selectedSkillDescription;
+  const skillLabel = lang === 'zh-CN' ? '选择 Skill' : 'Select Skill';
+  const skillSource = lang === 'zh-CN' ? '来源' : 'Source';
+  const builtinSource = lang === 'zh-CN' ? '内置默认' : 'Built-in default';
+  const githubSource = lang === 'zh-CN' ? 'GitHub 热门' : 'Popular on GitHub';
+  const refreshSkills = lang === 'zh-CN' ? '刷新热门 Skill' : 'Refresh Popular Skills';
+  const refreshingSkills = lang === 'zh-CN' ? '刷新中...' : 'Refreshing...';
+  const popularityLabel = lang === 'zh-CN' ? '热度' : 'Popularity';
+  const starsLabel = lang === 'zh-CN' ? 'stars' : 'stars';
   const selectAll = lang === 'zh-CN' ? '全选' : 'Select All';
   const install = lang === 'zh-CN' ? '安装' : 'Install';
   const cancel = lang === 'zh-CN' ? '取消' : 'Cancel';
@@ -303,23 +397,50 @@ function buildInstallDialogHtml(
   const installWorkspace = lang === 'zh-CN' ? '安装到工作区' : 'Install to Workspace';
   const workspaceMissing = lang === 'zh-CN' ? '请先打开工作区文件夹' : 'Open a workspace folder first';
   const unavailableGlobal = lang === 'zh-CN' ? '该工具没有全局配置路径' : 'No global install path for this tool';
-  const quickReference = lang === 'zh-CN' ? '快速参考' : 'Quick Reference';
-  const quickReferenceTitle = t(lang, 'qrTitle');
-  const quickReferenceClose = lang === 'zh-CN' ? '关闭' : 'Close';
-  const crossTool = lang === 'zh-CN' ? '跨工具策略' : 'Cross-tool';
-  const mainCommands = lang === 'zh-CN' ? '主要命令' : 'Main commands';
+  const skillDetails = lang === 'zh-CN' ? 'Skill 详情' : 'Skill Details';
+  const skillDetailsClose = lang === 'zh-CN' ? '关闭' : 'Close';
   const toolData = tools.map((tool) => ({
     id: tool.id,
     displayName: tool.displayName,
-    globalPath: tool.globalPaths?.[0] || '',
-    workspacePath: tool.primaryPaths[0] || '',
+    globalPath: getGlobalSkillPathForTool(tool, selectedSkill) || '',
+    workspacePath: getWorkspaceSkillRelativePath(selectedSkill),
   }));
-  const quickReferenceRows = [
-    { num: 1, name: t(lang, 'qrPrinciple1Title'), action: t(lang, 'qrPrinciple1Desc') },
-    { num: 2, name: t(lang, 'qrPrinciple2Title'), action: t(lang, 'qrPrinciple2Desc') },
-    { num: 3, name: t(lang, 'qrPrinciple3Title'), action: t(lang, 'qrPrinciple3Desc') },
-    { num: 4, name: t(lang, 'qrPrinciple4Title'), action: t(lang, 'qrPrinciple4Desc') },
-  ];
+  const skillData = skills.map((skill) => {
+    const popularityLevel = getPopularityLevel(skill, skills);
+    return {
+      id: skill.id,
+      slug: skill.slug,
+      displayName: getSkillDisplayName(skill, lang),
+      description: getSkillDescription(skill, lang),
+      source: skill.source,
+      sourceLabel: skill.source === 'builtin' ? builtinSource : githubSource,
+      stars: skill.stars,
+      popularityLevel,
+      popularityBadge: buildPopularityBadge(popularityLevel),
+      repositoryUrl: skill.repositoryUrl,
+    };
+  });
+  const skillRows = skillData.map((skill) => {
+    const selectedClass = skill.id === selectedSkill.id ? ' selected' : '';
+    const stars = skill.popularityBadge || '';
+    const starCount = skill.stars ? String(skill.stars) : '';
+    return `<button class="skill-row${selectedClass}" type="button" data-id="${escapeHtml(skill.id)}">
+      <span class="skill-row-name">${escapeHtml(skill.displayName)}</span>
+      <span class="skill-row-source">${escapeHtml(skill.sourceLabel)}</span>
+      <span class="skill-row-stars">${escapeHtml(stars)}</span>
+      <span class="skill-row-count">${escapeHtml(starCount)}</span>
+    </button>`;
+  }).join('');
+  const selectedSkillPopularityLevel = getPopularityLevel(selectedSkill, skills);
+  const selectedSkillPopularityBadge = buildPopularityBadge(selectedSkillPopularityLevel);
+  const selectedSkillSource = selectedSkill.source === 'builtin' ? builtinSource : githubSource;
+  const selectedSkillDetails = [
+    `${skillSource}: ${selectedSkillSource}`,
+    selectedSkillPopularityBadge ? `${popularityLabel}: ${selectedSkillPopularityBadge}` : '',
+    selectedSkill.stars ? `${selectedSkill.stars} ${starsLabel}` : '',
+    selectedSkill.repositoryUrl || '',
+  ].filter(Boolean).join(' · ');
+  const selectedSkillBody = getSkillBody(selectedSkill, lang);
 
   return `<!DOCTYPE html>
 <html>
@@ -412,6 +533,99 @@ function buildInstallDialogHtml(
     .icon-btn:hover { background: rgba(255,255,255,0.2); }
     .dialog-body {
       padding: 24px 28px;
+    }
+    .skill-picker {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 14px;
+      background: #252536;
+      border: 1px solid #34344f;
+      border-radius: 10px;
+      margin-bottom: 16px;
+    }
+    .skill-picker-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .skill-picker label {
+      color: #c7c7d8;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .skill-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .skill-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto 6.5em 7ch;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      border: 1px solid #3a3a50;
+      border-radius: 8px;
+      background: #171725;
+      color: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 8px 10px;
+      text-align: left;
+    }
+    .skill-row:hover { background: #202036; }
+    .skill-row.selected {
+      border-color: #6366f1;
+      background: rgba(99, 102, 241, 0.12);
+    }
+    .skill-row-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .skill-row-source {
+      color: #a0a0b0;
+      font-size: 12px;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .skill-row-stars {
+      color: #facc15;
+      font-family: 'SF Mono', Monaco, monospace;
+      letter-spacing: 1px;
+      min-height: 1em;
+      text-align: left;
+      white-space: nowrap;
+    }
+    .skill-row-count {
+      color: #888;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
+      text-align: right;
+      white-space: nowrap;
+    }
+    .skill-refresh-btn {
+      border: 1px solid #3a3a50;
+      border-radius: 8px;
+      background: #202036;
+      color: #d8d8ea;
+      cursor: pointer;
+      font-size: 12px;
+      padding: 6px 10px;
+      white-space: nowrap;
+    }
+    .skill-refresh-btn:hover { background: #2d2d42; }
+    .skill-refresh-btn:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+    .skill-meta {
+      color: #a0a0b0;
+      font-size: 12px;
+      line-height: 1.45;
     }
     .select-all {
       display: flex;
@@ -552,6 +766,7 @@ function buildInstallDialogHtml(
     .modal {
       width: 100%;
       max-width: 520px;
+      max-height: min(720px, calc(100vh - 48px));
       border-radius: 14px;
       border: 1px solid #2d2d44;
       background: #171725;
@@ -571,6 +786,8 @@ function buildInstallDialogHtml(
     }
     .modal-body {
       padding: 18px 20px 20px;
+      max-height: calc(100vh - 140px);
+      overflow-y: auto;
     }
     .modal-table {
       width: 100%;
@@ -598,13 +815,26 @@ function buildInstallDialogHtml(
       font-size: 13px;
       line-height: 1.45;
     }
+    .modal-skill-body {
+      margin-top: 12px;
+      padding: 14px;
+      border: 1px solid #2d2d44;
+      border-radius: 10px;
+      background: #10101a;
+      color: #d8d8ea;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
 	  </style>
 </head>
 <body>
   <div class="dialog">
     <div class="dialog-header">
       <div class="header-actions">
-        <button id="quickRefBtn" class="icon-btn" title="${quickReference}" aria-label="${quickReference}">
+        <button id="quickRefBtn" class="icon-btn" title="${skillDetails}" aria-label="${skillDetails}">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"></path>
@@ -620,6 +850,17 @@ function buildInstallDialogHtml(
       </div>
     </div>
     <div class="dialog-body">
+      <div class="skill-picker">
+        <div class="skill-picker-header">
+          <label>${skillLabel}</label>
+          <button id="refreshSkillsBtn" class="skill-refresh-btn" type="button">${refreshSkills}</button>
+        </div>
+        <div id="skillList" class="skill-list">${skillRows}</div>
+        <div class="skill-meta">
+          <strong id="skillSource">${skillSource}: ${escapeHtml(selectedSkill.source === 'builtin' ? builtinSource : githubSource)}</strong>
+          <span id="skillDescription">${escapeHtml(selectedSkillDescription)}</span>
+        </div>
+      </div>
       <div class="install-type">
         <button class="${state.installType === 'global' ? 'active' : ''}" data-type="global">${installGlobal}</button>
         <button class="${state.installType === 'workspace' ? 'active' : ''}" data-type="workspace">${installWorkspace}</button>
@@ -637,8 +878,8 @@ function buildInstallDialogHtml(
     <div class="modal-backdrop" id="quickRefModal">
       <div class="modal">
         <div class="modal-header">
-          <h2>${quickReferenceTitle}</h2>
-          <button id="closeQuickRefBtn" class="icon-btn" aria-label="${quickReferenceClose}">
+          <h2>${escapeHtml(selectedSkillName)}</h2>
+          <button id="closeQuickRefBtn" class="icon-btn" aria-label="${skillDetailsClose}">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 6 6 18"></path>
               <path d="m6 6 12 12"></path>
@@ -646,12 +887,11 @@ function buildInstallDialogHtml(
           </button>
         </div>
         <div class="modal-body">
-          <table class="modal-table">
-            <tr><th>#</th><th>${t(lang, 'qrPrinciple')}</th><th>${t(lang, 'qrKeyAction')}</th></tr>
-            ${quickReferenceRows.map((item) => `<tr><td>${item.num}</td><td><strong>${item.name}</strong></td><td>${item.action}</td></tr>`).join('')}
-          </table>
-          <div class="modal-card"><strong>${crossTool}</strong><br>${t(lang, 'qrCrossToolStrategy')}</div>
-          <div class="modal-card"><strong>${mainCommands}</strong><br>${t(lang, 'qrMainCommands')}</div>
+          <div class="modal-card">
+            <strong>${escapeHtml(selectedSkillDetails)}</strong><br>
+            ${escapeHtml(selectedSkillDescription)}
+          </div>
+          <pre class="modal-skill-body">${escapeHtml(selectedSkillBody)}</pre>
         </div>
       </div>
     </div>
@@ -659,15 +899,21 @@ function buildInstallDialogHtml(
   <script>
     window.onload = function() {
       var vscode = acquireVsCodeApi();
-      var tools = ${JSON.stringify(toolData)};
+      var tools = ${jsonForScript(toolData)};
+      var skills = ${jsonForScript(skillData)};
       var selectedTools = {};
-      var installType = ${JSON.stringify(state.installType)};
-      var hasWorkspace = ${JSON.stringify(Boolean(rootPath))};
-      var initialSelectedToolIds = ${JSON.stringify(state.selectedToolIds)};
+      var installType = ${jsonForScript(state.installType)};
+      var selectedSkillId = ${jsonForScript(selectedSkill.id)};
+      var hasWorkspace = ${jsonForScript(Boolean(rootPath))};
+      var initialSelectedToolIds = ${jsonForScript(state.selectedToolIds)};
       var toolsList = document.getElementById('toolsList');
       var selectAllEl = document.getElementById('selectAll');
       var installBtn = document.getElementById('installBtn');
       var quickRefModal = document.getElementById('quickRefModal');
+      var skillList = document.getElementById('skillList');
+      var refreshSkillsBtn = document.getElementById('refreshSkillsBtn');
+      var skillSourceEl = document.getElementById('skillSource');
+      var skillDescriptionEl = document.getElementById('skillDescription');
 
       function getAvailableTools() {
         return tools.filter(function(tool) {
@@ -680,9 +926,9 @@ function buildInstallDialogHtml(
 
       function getInstallPath(tool) {
         if (installType === 'global') {
-          return tool.globalPath || ${JSON.stringify(unavailableGlobal)};
+          return tool.globalPath || ${jsonForScript(unavailableGlobal)};
         }
-        return hasWorkspace ? tool.workspacePath : ${JSON.stringify(workspaceMissing)};
+        return hasWorkspace ? tool.workspacePath : ${jsonForScript(workspaceMissing)};
       }
 
       function isSelectable(tool) {
@@ -769,6 +1015,34 @@ function buildInstallDialogHtml(
         }
       }
 
+      function getSelectedSkill() {
+        return skills.filter(function(skill) { return skill.id === selectedSkillId; })[0] || skills[0];
+      }
+
+      function updateSkillMeta() {
+        var skill = getSelectedSkill();
+        if (skillSourceEl && skill) {
+          var popularity = skill.popularityBadge
+            ? ' · ' + ${jsonForScript(popularityLabel + ': ')} + skill.popularityBadge + (skill.stars ? ' · ' + skill.stars + ' ${starsLabel}' : '')
+            : '';
+          skillSourceEl.textContent = ${jsonForScript(skillSource + ': ')} + skill.sourceLabel + popularity;
+        }
+        if (skillDescriptionEl && skill) {
+          skillDescriptionEl.textContent = skill.description || '';
+        }
+      }
+
+      function updateSkillRows() {
+        if (!skillList) {
+          return;
+        }
+        var rows = skillList.querySelectorAll('.skill-row');
+        for (var rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+          var row = rows[rowIndex];
+          row.classList.toggle('selected', row.getAttribute('data-id') === selectedSkillId);
+        }
+      }
+
       function setInstallType(nextType) {
         installType = nextType;
         pruneSelectedTools();
@@ -786,9 +1060,45 @@ function buildInstallDialogHtml(
         selectedTools[toolId] = true;
       });
       pruneSelectedTools();
+      updateSkillMeta();
       renderTools();
       updateSelectAll();
       updateInstallBtn();
+
+      if (skillList) {
+        var skillRows = skillList.querySelectorAll('.skill-row');
+        for (var skillRowIndex = 0; skillRowIndex < skillRows.length; skillRowIndex++) {
+          skillRows[skillRowIndex].addEventListener('click', function() {
+            var nextSkillId = this.getAttribute('data-id');
+            if (!nextSkillId || nextSkillId === selectedSkillId) {
+              return;
+            }
+            selectedSkillId = nextSkillId;
+            updateSkillRows();
+            updateSkillMeta();
+            vscode.postMessage({
+              command: 'setSkill',
+              skillId: selectedSkillId,
+              installType: installType,
+              selectedToolIds: Object.keys(selectedTools)
+            });
+          });
+        }
+        updateSkillRows();
+      }
+
+      if (refreshSkillsBtn) {
+        refreshSkillsBtn.addEventListener('click', function() {
+          refreshSkillsBtn.disabled = true;
+          refreshSkillsBtn.textContent = ${jsonForScript(refreshingSkills)};
+          vscode.postMessage({
+            command: 'refreshSkills',
+            skillId: selectedSkillId,
+            installType: installType,
+            selectedToolIds: Object.keys(selectedTools)
+          });
+        });
+      }
 
       if (selectAllEl) {
         selectAllEl.addEventListener('change', function() {
@@ -822,7 +1132,8 @@ function buildInstallDialogHtml(
             command: 'setLanguage',
             lang: this.getAttribute('data-lang'),
             installType: installType,
-            selectedToolIds: Object.keys(selectedTools)
+            selectedToolIds: Object.keys(selectedTools),
+            selectedSkillId: selectedSkillId
           });
         });
       }
@@ -832,7 +1143,8 @@ function buildInstallDialogHtml(
           vscode.postMessage({
             command: 'install',
             toolIds: Object.keys(selectedTools),
-            installType: installType
+            installType: installType,
+            skillId: selectedSkillId
           });
         });
       }
@@ -888,26 +1200,34 @@ async function showInstallDialog(initialType: InstallType = 'global', selectedTo
   const config = vscode.workspace.getConfiguration('karpathyGuidelines');
   let langOpt = config.get('language', 'auto') as LanguageOption;
   const allTools = getAllTools();
+  let skills = await getDiscoveredSkills();
   const rootPath = getWorkspaceRoot();
-  const initialState: InstallDialogState = { installType: initialType, selectedToolIds };
+  const configuredSkill = getSkillById(skills, config.get('defaultSkill', KARPATHY_SKILL.id) as string);
+  const initialState: InstallDialogState = {
+    installType: initialType,
+    selectedToolIds,
+    selectedSkillId: configuredSkill.id,
+  };
+  let selectedSkillId = initialState.selectedSkillId || KARPATHY_SKILL.id;
+  let selectedSkill = getSkillById(skills, selectedSkillId);
 
   if (installDialogPanel) {
     installDialogPanel.reveal();
-    installDialogPanel.title = resolveLanguage(langOpt) === 'zh-CN' ? '安装 Karpathy 行为准则' : 'Install Karpathy Guidelines';
-    installDialogPanel.webview.html = buildInstallDialogHtml(langOpt, allTools, rootPath, initialState);
+    installDialogPanel.title = getInstallPanelTitle(selectedSkill, resolveLanguage(langOpt));
+    installDialogPanel.webview.html = buildInstallDialogHtml(langOpt, allTools, skills, rootPath, initialState);
     return;
   }
 
   const resolvedLang = resolveLanguage(langOpt);
   const panel = vscode.window.createWebviewPanel(
     'karpathyInstall',
-    resolvedLang === 'zh-CN' ? '安装 Karpathy 行为准则' : 'Install Karpathy Guidelines',
+    getInstallPanelTitle(selectedSkill, resolvedLang),
     vscode.ViewColumn.One,
     { enableScripts: true, retainContextWhenHidden: true }
   );
   installDialogPanel = panel;
 
-  panel.webview.html = buildInstallDialogHtml(langOpt, allTools, rootPath, initialState);
+  panel.webview.html = buildInstallDialogHtml(langOpt, allTools, skills, rootPath, initialState);
 
   panel.webview.onDidReceiveMessage(async (message) => {
     if (message.command === 'cancel' || message.command === 'close') {
@@ -919,10 +1239,39 @@ async function showInstallDialog(initialType: InstallType = 'global', selectedTo
     if (message.command === 'setLanguage') {
       langOpt = message.lang as LanguageOption;
       await config.update('language', langOpt, vscode.ConfigurationTarget.Global);
-      panel.title = resolveLanguage(langOpt) === 'zh-CN' ? '安装 Karpathy 行为准则' : 'Install Karpathy Guidelines';
-      panel.webview.html = buildInstallDialogHtml(langOpt, allTools, rootPath, {
+      selectedSkillId = typeof message.selectedSkillId === 'string' ? message.selectedSkillId : selectedSkillId;
+      selectedSkill = getSkillById(skills, selectedSkillId);
+      panel.title = getInstallPanelTitle(selectedSkill, resolveLanguage(langOpt));
+      panel.webview.html = buildInstallDialogHtml(langOpt, allTools, skills, rootPath, {
         installType: (message.installType as InstallType) || initialType,
         selectedToolIds: Array.isArray(message.selectedToolIds) ? message.selectedToolIds : [],
+        selectedSkillId,
+      });
+      return;
+    }
+
+    if (message.command === 'setSkill') {
+      selectedSkillId = typeof message.skillId === 'string' ? message.skillId : KARPATHY_SKILL.id;
+      selectedSkill = getSkillById(skills, selectedSkillId);
+      await config.update('defaultSkill', selectedSkill.id, vscode.ConfigurationTarget.Global);
+      panel.title = getInstallPanelTitle(selectedSkill, resolveLanguage(langOpt));
+      panel.webview.html = buildInstallDialogHtml(langOpt, allTools, skills, rootPath, {
+        installType: (message.installType as InstallType) || initialType,
+        selectedToolIds: Array.isArray(message.selectedToolIds) ? message.selectedToolIds : [],
+        selectedSkillId,
+      });
+      return;
+    }
+
+    if (message.command === 'refreshSkills') {
+      skills = await getDiscoveredSkills(true);
+      selectedSkillId = typeof message.skillId === 'string' ? message.skillId : selectedSkillId;
+      selectedSkill = getSkillById(skills, selectedSkillId);
+      panel.title = getInstallPanelTitle(selectedSkill, resolveLanguage(langOpt));
+      panel.webview.html = buildInstallDialogHtml(langOpt, allTools, skills, rootPath, {
+        installType: (message.installType as InstallType) || initialType,
+        selectedToolIds: Array.isArray(message.selectedToolIds) ? message.selectedToolIds : [],
+        selectedSkillId: selectedSkill.id,
       });
       return;
     }
@@ -933,6 +1282,7 @@ async function showInstallDialog(initialType: InstallType = 'global', selectedTo
       const installLang = resolveLanguage(langOpt);
       const toolIds = Array.isArray(message.toolIds) ? message.toolIds as string[] : [];
       const installType = (message.installType as InstallType) || 'global';
+      selectedSkill = getSkillById(skills, typeof message.skillId === 'string' ? message.skillId : selectedSkillId);
 
       if (installType === 'workspace') {
         const workspaceRoot = getWorkspaceRoot();
@@ -946,25 +1296,25 @@ async function showInstallDialog(initialType: InstallType = 'global', selectedTo
           return;
         }
 
-        const report = await generateConfigsForTools(workspaceRoot, toolIds, { overwriteExisting }, installLang);
-        const created = report.allFiles.filter((file) => file.status === 'created' || file.status === 'updated').length;
-        const skipped = report.allFiles.filter((file) => file.status === 'skipped').length;
-        const unchanged = report.allFiles.filter((file) => file.status === 'unchanged').length;
-        const errors = report.allFiles.filter((file) => file.status === 'error').length;
+        const result = await installWorkspaceSkill(workspaceRoot, selectedSkill, { overwriteExisting }, installLang);
+        const created = result.status === 'created' || result.status === 'updated' ? 1 : 0;
+        const skipped = result.status === 'skipped' ? 1 : 0;
+        const unchanged = result.status === 'unchanged' ? 1 : 0;
+        const errors = result.status === 'error' ? 1 : 0;
 
         let title;
         let msg;
         if (errors > 0) {
           title = installLang === 'zh-CN' ? '安装失败' : 'Install Failed';
-          msg = installLang === 'zh-CN' ? `${errors} 个文件写入失败` : `${errors} file(s) failed to write`;
+          msg = installLang === 'zh-CN' ? `${errors} 个 Skill 文件写入失败` : `${errors} skill file(s) failed to write`;
         } else if (created === 0 && skipped === 0 && unchanged > 0) {
           title = installLang === 'zh-CN' ? '已是最新' : 'Up to Date';
-          msg = installLang === 'zh-CN' ? `工作区中的 ${unchanged} 个配置已是最新` : `${unchanged} workspace config(s) are already up to date`;
+          msg = installLang === 'zh-CN' ? `工作区中的 Skill 已是最新：${result.relativePath}` : `Workspace skill is already up to date: ${result.relativePath}`;
         } else {
           title = installLang === 'zh-CN' ? '安装成功' : 'Install Success';
           msg = installLang === 'zh-CN'
-            ? `工作区中已写入 ${created} 个配置，${skipped} 个跳过，${unchanged} 个已是最新`
-            : `Wrote ${created} workspace config(s), skipped ${skipped}, ${unchanged} up to date`;
+            ? `工作区中已写入 ${created} 个 Skill 文件，${skipped} 个跳过，${unchanged} 个已是最新：${result.relativePath}`
+            : `Wrote ${created} workspace skill file(s), skipped ${skipped}, ${unchanged} up to date: ${result.relativePath}`;
         }
 
         panel.webview.postMessage({
@@ -976,7 +1326,7 @@ async function showInstallDialog(initialType: InstallType = 'global', selectedTo
         return;
       }
 
-      const results = await installGlobal(toolIds, { overwriteExisting }, installLang);
+      const results = await installGlobalSkills(toolIds, { overwriteExisting }, installLang, selectedSkill);
 
       const created = results.filter(r => r.status === 'created' || r.status === 'updated').length;
       const skipped = results.filter(r => r.status === 'skipped').length;
@@ -989,12 +1339,12 @@ async function showInstallDialog(initialType: InstallType = 'global', selectedTo
         msg = installLang === 'zh-CN' ? `${errors} 个错误` : `${errors} error(s)`;
       } else if (created === 0 && skipped === 0 && unchanged > 0) {
         title = installLang === 'zh-CN' ? '已是最新' : 'Up to Date';
-        msg = installLang === 'zh-CN' ? `所有 ${unchanged} 个配置已是最新` : `All ${unchanged} configs are up to date`;
+        msg = installLang === 'zh-CN' ? `所有 ${unchanged} 个 Skill 文件已是最新` : `All ${unchanged} skill file(s) are up to date`;
       } else {
         title = installLang === 'zh-CN' ? '安装成功' : 'Install Success';
         msg = installLang === 'zh-CN'
-          ? `已安装 ${created} 个配置，${skipped} 个跳过，${unchanged} 个已是最新`
-          : `Installed ${created}, skipped ${skipped}, ${unchanged} up to date`;
+          ? `已安装 ${created} 个 Skill 文件，${skipped} 个跳过，${unchanged} 个已是最新`
+          : `Installed ${created} skill file(s), skipped ${skipped}, ${unchanged} up to date`;
       }
 
       panel.webview.postMessage({
@@ -1043,13 +1393,14 @@ async function showGenerationReport(
   const lang = getCurrentLanguage();
   const config = vscode.workspace.getConfiguration('karpathyGuidelines');
   const overwriteExisting = config.get('overwriteExisting', false) as boolean;
-  const report = await generateConfigsForTools(rootPath, toolIds, { overwriteExisting }, lang);
+  const skill = await getSelectedSkillFromConfig();
+  const report = await generateConfigsForTools(rootPath, toolIds, { overwriteExisting }, lang, skill);
 
   const createdOrUpdated = report.allFiles.filter((file) => file.status === 'created' || file.status === 'updated');
   const skipped = report.allFiles.filter((file) => file.status === 'skipped');
   const errored = report.allFiles.filter((file) => file.status === 'error');
 
-  const markdown = buildGenerationMarkdown(rootPath, toolIds, report, note, lang);
+  const markdown = buildGenerationMarkdown(rootPath, toolIds, report, note, lang, skill);
   const document = await vscode.workspace.openTextDocument({
     content: markdown,
     language: 'markdown',
@@ -1097,8 +1448,10 @@ async function selectTools(defaultToolId: string): Promise<ToolConfig[] | undefi
 
 export function activate(context: vscode.ExtensionContext): void {
   const showCommand = vscode.commands.registerCommand('karpathy-guidelines.show', async () => {
+    const skill = await getSelectedSkillFromConfig();
+    const lang = getCurrentLanguage();
     const document = await vscode.workspace.openTextDocument({
-      content: GUIDELINES_CONTENT,
+      content: buildGuidelinesContent(lang, true, skill),
       language: 'markdown',
     });
     await vscode.window.showTextDocument(document, { preview: false });
@@ -1124,13 +1477,15 @@ export function activate(context: vscode.ExtensionContext): void {
     const config = vscode.workspace.getConfiguration('karpathyGuidelines');
     const insertAs = config.get('insertAs', 'markdown') as string;
     const commentPrefix = insertAs === 'comments' ? getCommentPrefix(editor.document.languageId) : '';
+    const skill = await getSelectedSkillFromConfig();
+    const guidelinesContent = buildGuidelinesContent(getCurrentLanguage(), true, skill);
 
     const content =
       insertAs === 'markdown'
-        ? GUIDELINES_CONTENT
+        ? guidelinesContent
         : insertAs === 'comments'
-          ? commentPrefix + GUIDELINES_CONTENT.split('\n').join(`\n${commentPrefix}`)
-          : GUIDELINES_CONTENT;
+          ? commentPrefix + guidelinesContent.split('\n').join(`\n${commentPrefix}`)
+          : guidelinesContent;
 
     await editor.edit((editBuilder: any) => {
       editBuilder.insert(editor.selection.start, content);
@@ -1235,6 +1590,24 @@ export function activate(context: vscode.ExtensionContext): void {
     await showInstallDialog('global');
   });
 
+  const refreshSkillsCommand = vscode.commands.registerCommand('karpathy-guidelines.refreshSkills', async () => {
+    const lang = getCurrentLanguage();
+    const skills = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: lang === 'zh-CN' ? '正在刷新热门 AI Skill...' : 'Refreshing popular AI skills...',
+        cancellable: false,
+      },
+      () => getDiscoveredSkills(true)
+    );
+    const remoteCount = skills.filter((skill) => skill.source === 'github').length;
+    const message = lang === 'zh-CN'
+      ? `已刷新 ${remoteCount} 个 GitHub Skill，Karpathy 仍作为默认 fallback。`
+      : `Refreshed ${remoteCount} GitHub skill(s). Karpathy remains the fallback.`;
+    vscode.window.showInformationMessage(message);
+    await showInstallDialog('global');
+  });
+
   const autoActivateListener = vscode.workspace.onDidOpenTextDocument(async (document: any) => {
     const config = vscode.workspace.getConfiguration('karpathyGuidelines');
     if (!(config.get('autoActivate', false) as boolean)) {
@@ -1260,6 +1633,7 @@ export function activate(context: vscode.ExtensionContext): void {
     installLocalCommand,
     installGlobalAllCommand,
     openSettingsCommand,
+    refreshSkillsCommand,
     autoActivateListener
   );
 

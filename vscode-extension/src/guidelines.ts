@@ -1,6 +1,7 @@
 // Guidelines content with i18n support
 
 import { Language } from './i18n';
+import type { InstructionSkill } from './tools/types';
 
 const GUIDELINES_BODY_EN = `Behavioral guidelines to reduce common LLM coding mistakes.
 
@@ -148,18 +149,59 @@ export function getLanguageRules(lang: Language): string {
   return lang === 'zh-CN' ? LANGUAGE_RULES_ZH : LANGUAGE_RULES_EN;
 }
 
-export function buildGuidelinesContent(lang: Language, includeLanguageRules: boolean = false): string {
-  const body = getGuidelinesBody(lang);
-  const langRules = includeLanguageRules ? '\n\n' + getLanguageRules(lang) : '';
-  return `# Karpathy Behavioral Guidelines
+function isKarpathySkill(skill?: InstructionSkill): boolean {
+  return !skill || skill.id === 'karpathy-guidelines';
+}
+
+function getSkillName(skill: InstructionSkill | undefined, lang: Language): string {
+  return skill?.localizedDisplayName?.[lang] || skill?.displayName || 'Karpathy Guidelines';
+}
+
+function getSkillDescription(skill: InstructionSkill | undefined, lang: Language): string {
+  return skill?.localizedDescription?.[lang] || skill?.description || (
+    lang === 'zh-CN'
+      ? '减少常见 LLM 编码错误的行为准则。'
+      : 'Behavioral guidelines to reduce common LLM coding mistakes.'
+  );
+}
+
+function getSkillInstructionBody(lang: Language, skill?: InstructionSkill): string {
+  if (!skill || skill.id === 'karpathy-guidelines') {
+    return getGuidelinesBody(lang);
+  }
+  return skill.localizedContent?.[lang] || skill.content || getSkillDescription(skill, lang);
+}
+
+export function buildGuidelinesContent(lang: Language, includeLanguageRules: boolean = false, skill?: InstructionSkill): string {
+  if (isKarpathySkill(skill)) {
+    const body = getGuidelinesBody(lang);
+    const langRules = includeLanguageRules ? '\n\n' + getLanguageRules(lang) : '';
+    return `# Karpathy Behavioral Guidelines
 
 ${body}${langRules}`;
+  }
+
+  const langRules = includeLanguageRules ? '\n\n' + getLanguageRules(lang) : '';
+  return `# ${getSkillName(skill, lang)}
+
+${getSkillDescription(skill, lang)}${langRules}
+
+${getSkillInstructionBody(lang, skill)}`;
 }
 
 export const GUIDELINES_CONTENT = buildGuidelinesContent('en', true);
 
-export function buildAgentsContent(lang: Language): string {
-  const body = getGuidelinesBody(lang);
+export function buildAgentsContent(lang: Language, skill?: InstructionSkill): string {
+  const body = getSkillInstructionBody(lang, skill);
+  if (!isKarpathySkill(skill)) {
+    return `# ${getSkillName(skill, lang)}
+
+${getSkillDescription(skill, lang)}
+
+${getLanguageRules(lang)}
+
+${body}`;
+  }
   const header = lang === 'zh-CN'
     ? `# Karpathy 行为准则
 
@@ -176,13 +218,20 @@ Shared source of truth for AI coding agents used in this repository.
   return header + body;
 }
 
-export function buildClaudeContent(lang: Language): string {
-  // CLAUDE.md contains the full guidelines (same as AGENTS.md)
-  return buildAgentsContent(lang);
+export function buildClaudeContent(lang: Language, skill?: InstructionSkill): string {
+  return buildAgentsContent(lang, skill);
 }
 
-export function buildGeminiContent(lang: Language): string {
-  const body = getGuidelinesBody(lang);
+export function buildGeminiContent(lang: Language, skill?: InstructionSkill): string {
+  const body = getSkillInstructionBody(lang, skill);
+  if (!isKarpathySkill(skill)) {
+    return `# Gemini CLI Project Context
+
+The project-level instructions for ${getSkillName(skill, lang)} are stored in \`AGENTS.md\`. When \`GEMINI.md\` is installed globally, the selected skill is inlined here.
+
+${body}
+`;
+  }
   if (lang === 'zh-CN') {
     return `# Gemini CLI 项目上下文
 
@@ -201,16 +250,31 @@ ${body}
 
 export function buildGeminiSettingsContent(): string {
   return `{
-  "contextFileName": [
-    "AGENTS.md",
-    "GEMINI.md"
-  ]
+  "context": {
+    "fileName": [
+      "AGENTS.md",
+      "GEMINI.md"
+    ]
+  }
 }
 `;
 }
 
-export function buildCursorRuleContent(lang: Language): string {
-  const body = getGuidelinesBody(lang);
+export function buildCursorRuleContent(lang: Language, skill?: InstructionSkill): string {
+  const body = getSkillInstructionBody(lang, skill);
+  if (!isKarpathySkill(skill)) {
+    return `---
+description: ${getSkillDescription(skill, lang)}
+alwaysApply: true
+---
+
+# ${getSkillName(skill, lang)}
+
+Prefer the shared \`AGENTS.md\` guidance when there is overlap.
+
+${body}
+`;
+  }
   if (lang === 'zh-CN') {
     return `---
 description: Karpathy 行为准则用于 AI 编码工作
@@ -237,8 +301,22 @@ ${body}
 `;
 }
 
-export function buildWindsurfRuleContent(lang: Language): string {
-  const body = getGuidelinesBody(lang);
+export function buildWindsurfRuleContent(lang: Language, skill?: InstructionSkill): string {
+  const body = getSkillInstructionBody(lang, skill);
+  if (!isKarpathySkill(skill)) {
+    return `---
+name: ${skill?.slug || 'ai-skill'}
+description: ${getSkillDescription(skill, lang)}
+alwaysApply: true
+---
+
+# ${getSkillName(skill, lang)}
+
+Prefer the shared \`AGENTS.md\` guidance when there is overlap.
+
+${body}
+`;
+  }
   if (lang === 'zh-CN') {
     return `---
 name: karpathy-guidelines
@@ -267,8 +345,18 @@ ${body}
 `;
 }
 
-export function buildCopilotInstructionsContent(lang: Language): string {
-  const body = getGuidelinesBody(lang);
+export function buildCopilotInstructionsContent(lang: Language, skill?: InstructionSkill): string {
+  const body = getSkillInstructionBody(lang, skill);
+  if (!isKarpathySkill(skill)) {
+    return `# ${getSkillName(skill, lang)} for GitHub Copilot
+
+Repository-wide Copilot instructions. Keep these aligned with \`AGENTS.md\`.
+
+## Selected Skill
+
+${body}
+`;
+  }
   if (lang === 'zh-CN') {
     return `# Karpathy 准则用于 GitHub Copilot
 
@@ -303,7 +391,19 @@ ${body}
 `;
 }
 
-export function buildCopilotPathInstructionsContent(lang: Language): string {
+export function buildCopilotPathInstructionsContent(lang: Language, skill?: InstructionSkill): string {
+  if (!isKarpathySkill(skill)) {
+    return `---
+applyTo: "**"
+---
+
+# ${getSkillName(skill, lang)}
+
+Use \`AGENTS.md\` as the shared source of truth when reasoning about project behavior.
+
+${getSkillInstructionBody(lang, skill)}
+`;
+  }
   if (lang === 'zh-CN') {
     return `---
 applyTo: "**"
@@ -338,8 +438,14 @@ Use \`AGENTS.md\` as the shared source of truth when reasoning about project beh
 `;
 }
 
-export function buildClineRuleContent(lang: Language): string {
-  const body = getGuidelinesBody(lang);
+export function buildClineRuleContent(lang: Language, skill?: InstructionSkill): string {
+  const body = getSkillInstructionBody(lang, skill);
+  if (!isKarpathySkill(skill)) {
+    return `# ${getSkillName(skill, lang)} for Cline
+
+${body}
+`;
+  }
   if (lang === 'zh-CN') {
     return `# Karpathy 准则用于 Cline
 
@@ -352,8 +458,20 @@ ${body}
 `;
 }
 
-export function buildContinueRuleContent(lang: Language): string {
-  const body = getGuidelinesBody(lang);
+export function buildContinueRuleContent(lang: Language, skill?: InstructionSkill): string {
+  const body = getSkillInstructionBody(lang, skill);
+  if (!isKarpathySkill(skill)) {
+    return `---
+name: ${skill?.slug || 'ai-skill'}
+description: ${getSkillDescription(skill, lang)}
+alwaysApply: true
+---
+
+# ${getSkillName(skill, lang)}
+
+${body}
+`;
+  }
   if (lang === 'zh-CN') {
     return `---
 name: karpathy-guidelines
@@ -382,68 +500,5 @@ export function buildAiderConfigContent(): string {
   return `# Load shared repository guidance on every aider session.
 read:
   - AGENTS.md
-`;
-}
-
-export function buildOpenCodeContent(lang: Language): string {
-  if (lang === 'zh-CN') {
-    return `# Karpathy 准则用于 OpenCode
-
-从 \`AGENTS.md\` 加载共享的仓库指令。
-
-@AGENTS.md
-
-## OpenCode 注意事项
-
-- 将 \`AGENTS.md\` 视为规范的项目指导。
-- 当 AGENTS.md 存在于项目根目录时，OpenCode 会自动加载它。
-`;
-  }
-  return `# Karpathy Guidelines for OpenCode
-
-Load the shared repository instructions from \`AGENTS.md\`.
-
-@AGENTS.md
-
-## OpenCode Notes
-
-- Treat \`AGENTS.md\` as the canonical project guidance.
-- OpenCode will automatically load AGENTS.md when present in the project root.
-`;
-}
-
-export function buildCopilotCliInstructionsContent(lang: Language): string {
-  const body = getGuidelinesBody(lang);
-  if (lang === 'zh-CN') {
-    return `# Karpathy 准则用于 GitHub Copilot CLI
-
-\`gh copilot\` CLI 会话的仓库范围指令。
-
-## 操作规则
-
-1. 编码前先思考。陈述假设，在任务不明确时提问。
-2. 优先选择满足需求的简单实现。
-3. 进行精准修改。不要重构无关代码。
-4. 朝着可验证的成功标准努力，在停止前检查结果。
-
-## 完整指导
-
-${body}
-`;
-  }
-  return `# Karpathy Guidelines for GitHub Copilot CLI
-
-Repository-wide instructions for \`gh copilot\` CLI sessions.
-
-## Operating Rules
-
-1. Think before coding. State assumptions and ask if the task is ambiguous.
-2. Prefer the simplest implementation that satisfies the request.
-3. Make surgical changes. Do not refactor unrelated code.
-4. Work toward verifiable success criteria and check them before stopping.
-
-## Full Guidance
-
-${body}
 `;
 }

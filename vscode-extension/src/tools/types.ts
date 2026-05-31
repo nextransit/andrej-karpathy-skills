@@ -1,9 +1,29 @@
+export type Language = 'en' | 'zh-CN';
+export type LanguageOption = 'auto' | 'en' | 'zh-CN';
 export type ToolType = 'cli' | 'ide' | 'vscode-ext';
+
+export interface InstructionSkill {
+  id: string;
+  slug: string;
+  displayName: string;
+  description: string;
+  source: 'builtin' | 'github';
+  content?: string;
+  localizedContent?: Partial<Record<Language, string>>;
+  localizedDisplayName?: Partial<Record<Language, string>>;
+  localizedDescription?: Partial<Record<Language, string>>;
+  repositoryFullName?: string;
+  repositoryUrl?: string;
+  defaultBranch?: string;
+  stars?: number;
+  pushedAt?: string;
+}
 
 export interface GeneratedFileSpec {
   relativePath: string;
   description: string;
   content: string;
+  writeMode?: 'replace' | 'append-managed-block';
 }
 
 export interface GeneratedFileResult extends GeneratedFileSpec {
@@ -21,11 +41,8 @@ export interface ToolConfig {
   primaryPaths: string[];
   globalPaths?: string[];
   detectMarkers: string[];
-  buildFiles: (lang: Language) => GeneratedFileSpec[];
+  buildFiles: (lang: Language, skill?: InstructionSkill) => GeneratedFileSpec[];
 }
-
-export type Language = 'en' | 'zh-CN';
-export type LanguageOption = 'auto' | 'en' | 'zh-CN';
 
 export interface ConfigGenerationOptions {
   overwriteExisting: boolean;

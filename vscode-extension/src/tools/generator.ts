@@ -6,6 +6,7 @@ import {
   GeneratedFileResult,
   GeneratedFileSpec,
   GenerationReport,
+  InstructionSkill,
   Language,
   LanguageOption,
   ToolConfig,
@@ -13,6 +14,7 @@ import {
   WorkspaceToolStatus,
 } from './types';
 import { RECOMMENDED_TOOL_IDS, TOOL_DISPLAY_ORDER, TOOL_LIST, TOOLS } from './registry';
+import { buildSkillMarkdown } from '../skills';
 
 function expandHome(filepath: string): string {
   if (filepath.startsWith('~/') || filepath === '~') {
@@ -30,7 +32,58 @@ async function pathExists(targetPath: string): Promise<boolean> {
   }
 }
 
-function dedupeFiles(toolIds: string[], lang: Language): Map<string, GeneratedFileSpec> {
+const MANAGED_BLOCK_START = '<!-- KARPATHY_GUIDELINES_START -->';
+const MANAGED_BLOCK_END = '<!-- KARPATHY_GUIDELINES_END -->';
+function buildManagedBlock(content: string): string {
+  return `${MANAGED_BLOCK_START}\n${content.trimEnd()}\n${MANAGED_BLOCK_END}\n`;
+}
+
+function mergeManagedBlock(currentContent: string, generatedContent: string): string {
+  const block = buildManagedBlock(generatedContent);
+  const normalizedCurrent = currentContent.trim();
+  const normalizedGenerated = generatedContent.trim();
+
+  if (normalizedCurrent === normalizedGenerated) {
+    return block;
+  }
+
+  const startIndex = currentContent.indexOf(MANAGED_BLOCK_START);
+  const endIndex = currentContent.indexOf(MANAGED_BLOCK_END, startIndex);
+
+  if (startIndex >= 0 && endIndex >= 0) {
+    const blockEndIndex = endIndex + MANAGED_BLOCK_END.length;
+    const before = currentContent.slice(0, startIndex).trimEnd();
+    const after = currentContent.slice(blockEndIndex).trimStart();
+    const parts = [before, block.trimEnd(), after].filter((part) => part.length > 0);
+    return `${parts.join('\n\n')}\n`;
+  }
+
+  const separator = currentContent.trimEnd().length > 0 ? '\n\n' : '';
+  return `${currentContent.trimEnd()}${separator}${block}`;
+}
+
+export function getWorkspaceSkillRelativePath(skill: InstructionSkill): string {
+  return path.posix.join('skills', skill.slug, 'SKILL.md');
+}
+
+export function getGlobalSkillPathForTool(tool: ToolConfig, skill: InstructionSkill): string | undefined {
+  const globalPath = tool.globalPaths?.[0];
+  if (!globalPath) {
+    return undefined;
+  }
+
+  return path.posix.join(path.posix.dirname(globalPath), 'skills', skill.slug, 'SKILL.md');
+}
+
+function buildSkillFileSpec(skill: InstructionSkill, lang: Language): GeneratedFileSpec {
+  return {
+    relativePath: getWorkspaceSkillRelativePath(skill),
+    description: lang === 'zh-CN' ? 'Skill 定义文件' : 'Skill definition file',
+    content: buildSkillMarkdown(skill, lang),
+  };
+}
+
+function dedupeFiles(toolIds: string[], lang: Language, skill?: InstructionSkill): Map<string, GeneratedFileSpec> {
   const files = new Map<string, GeneratedFileSpec>();
 
   for (const toolId of toolIds) {
@@ -39,7 +92,7 @@ function dedupeFiles(toolIds: string[], lang: Language): Map<string, GeneratedFi
       continue;
     }
 
-    for (const file of tool.buildFiles(lang)) {
+    for (const file of tool.buildFiles(lang, skill)) {
       const existing = files.get(file.relativePath);
       if (existing && existing.content !== file.content) {
         throw new Error(`Conflicting generated content for ${file.relativePath}`);
@@ -60,13 +113,17 @@ async function writeFileResult(
 
   try {
     const exists = await pathExists(absolutePath);
+    const currentContent = exists ? await fs.promises.readFile(absolutePath, 'utf-8') : '';
+    const nextContent = spec.writeMode === 'append-managed-block'
+      ? mergeManagedBlock(currentContent, spec.content)
+      : spec.content;
+
     if (exists) {
-      const currentContent = await fs.promises.readFile(absolutePath, 'utf-8');
-      if (currentContent === spec.content) {
+      if (currentContent === nextContent) {
         return { ...spec, absolutePath, status: 'unchanged' };
       }
 
-      if (!options.overwriteExisting) {
+      if (!options.overwriteExisting && spec.writeMode !== 'append-managed-block') {
         return {
           ...spec,
           absolutePath,
@@ -77,7 +134,7 @@ async function writeFileResult(
     }
 
     await fs.promises.mkdir(path.dirname(absolutePath), { recursive: true });
-    await fs.promises.writeFile(absolutePath, spec.content, 'utf-8');
+    await fs.promises.writeFile(absolutePath, nextContent, 'utf-8');
 
     return {
       ...spec,
@@ -97,13 +154,14 @@ async function writeFileResult(
 function buildToolResults(
   toolIds: string[],
   fileResults: Map<string, GeneratedFileResult>,
-  lang: Language
+  lang: Language,
+  skill?: InstructionSkill
 ): ToolGenerationResult[] {
   return toolIds
     .map((toolId) => TOOLS[toolId])
     .filter((tool): tool is ToolConfig => Boolean(tool))
     .map((tool) => {
-      const files = tool.buildFiles(lang).map((file) => fileResults.get(file.relativePath)).filter(
+      const files = tool.buildFiles(lang, skill).map((file) => fileResults.get(file.relativePath)).filter(
         (file): file is GeneratedFileResult => Boolean(file)
       );
       return {
@@ -118,10 +176,11 @@ export async function generateConfigsForTools(
   rootPath: string,
   toolIds: string[],
   options: ConfigGenerationOptions,
-  lang: Language = 'en'
+  lang: Language = 'en',
+  skill?: InstructionSkill
 ): Promise<GenerationReport> {
   const uniqueToolIds = Array.from(new Set(toolIds.filter((toolId) => Boolean(TOOLS[toolId]))));
-  const dedupedFiles = dedupeFiles(uniqueToolIds, lang);
+  const dedupedFiles = dedupeFiles(uniqueToolIds, lang, skill);
   const fileResults = new Map<string, GeneratedFileResult>();
 
   for (const spec of dedupedFiles.values()) {
@@ -134,9 +193,18 @@ export async function generateConfigsForTools(
   );
 
   return {
-    tools: buildToolResults(uniqueToolIds, fileResults, lang),
+    tools: buildToolResults(uniqueToolIds, fileResults, lang, skill),
     allFiles,
   };
+}
+
+export async function installWorkspaceSkill(
+  rootPath: string,
+  skill: InstructionSkill,
+  options: ConfigGenerationOptions,
+  lang: Language = 'en'
+): Promise<GeneratedFileResult> {
+  return writeFileResult(rootPath, buildSkillFileSpec(skill, lang), options);
 }
 
 export async function detectTools(rootPath: string): Promise<ToolConfig[]> {
@@ -203,7 +271,7 @@ export interface GlobalInstallResult {
   error?: string;
 }
 
-export async function installGlobal(toolIds: string[], options: ConfigGenerationOptions, lang: Language = 'en'): Promise<GlobalInstallResult[]> {
+export async function installGlobal(toolIds: string[], options: ConfigGenerationOptions, lang: Language = 'en', skill?: InstructionSkill): Promise<GlobalInstallResult[]> {
   const results: GlobalInstallResult[] = [];
 
   for (const toolId of toolIds) {
@@ -224,7 +292,7 @@ export async function installGlobal(toolIds: string[], options: ConfigGeneration
     // Use the first global path
     const globalPath = expandHome(globalPaths[0]);
     const globalBasename = path.basename(globalPath);
-    const generatedFiles = tool.buildFiles(lang);
+    const generatedFiles = tool.buildFiles(lang, skill);
 
     // Find matching file:
     // 1) Exact relativePath match (e.g., "CLAUDE.md" === "CLAUDE.md")
@@ -234,26 +302,69 @@ export async function installGlobal(toolIds: string[], options: ConfigGeneration
       generatedFiles.find((file) => file.relativePath === globalBasename) ||
       generatedFiles.find((file) => path.basename(file.relativePath) === globalBasename) ||
       generatedFiles[0];
-    const content = matchingFile?.content || '';
+    const spec = matchingFile;
 
     try {
       const exists = await pathExists(globalPath);
-      if (exists && !options.overwriteExisting) {
-        const currentContent = await fs.promises.readFile(globalPath, 'utf-8');
-        if (currentContent === content) {
+      const currentContent = exists ? await fs.promises.readFile(globalPath, 'utf-8') : '';
+      const nextContent = spec?.writeMode === 'append-managed-block'
+        ? mergeManagedBlock(currentContent, spec.content)
+        : spec?.content || '';
+
+      if (exists) {
+        if (currentContent === nextContent) {
           results.push({ tool, path: globalPath, status: 'unchanged' });
-        } else {
-          results.push({ tool, path: globalPath, status: 'skipped', error: 'File exists, overwrite disabled' });
+          continue;
         }
-        continue;
+
+        if (!options.overwriteExisting && spec?.writeMode !== 'append-managed-block') {
+          results.push({ tool, path: globalPath, status: 'skipped', error: 'File exists, overwrite disabled' });
+          continue;
+        }
       }
 
       await fs.promises.mkdir(path.dirname(globalPath), { recursive: true });
-      await fs.promises.writeFile(globalPath, content, 'utf-8');
+      await fs.promises.writeFile(globalPath, nextContent, 'utf-8');
       results.push({ tool, path: globalPath, status: exists ? 'updated' : 'created' });
     } catch (error) {
       results.push({ tool, path: globalPath, status: 'error', error: String(error) });
     }
+  }
+
+  return results;
+}
+
+export async function installGlobalSkills(toolIds: string[], options: ConfigGenerationOptions, lang: Language = 'en', skill: InstructionSkill): Promise<GlobalInstallResult[]> {
+  const results: GlobalInstallResult[] = [];
+
+  for (const toolId of toolIds) {
+    const tool = TOOLS[toolId];
+    if (!tool) { continue; }
+
+    const displayPath = getGlobalSkillPathForTool(tool, skill);
+    if (!displayPath) {
+      results.push({
+        tool,
+        path: '',
+        status: 'skipped',
+        error: 'No global skill path defined for this tool'
+      });
+      continue;
+    }
+
+    const absolutePath = expandHome(displayPath);
+    const spec = {
+      ...buildSkillFileSpec(skill, lang),
+      relativePath: path.basename(absolutePath),
+    };
+    const result = await writeFileResult(path.dirname(absolutePath), spec, options);
+
+    results.push({
+      tool,
+      path: absolutePath,
+      status: result.status,
+      error: result.error,
+    });
   }
 
   return results;

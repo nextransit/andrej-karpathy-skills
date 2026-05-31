@@ -10,7 +10,7 @@ Apply Andrej Karpathy's behavioral guidelines across the main AI coding CLIs and
 
 This extension now uses a shared `AGENTS.md` source of truth when possible, then generates tool-specific entrypoints only for tools that need them.
 
-That makes it practical to keep Claude Code, Codex, Gemini CLI, Cursor, Windsurf, Copilot, Cline, Continue, and Aider aligned instead of hand-maintaining separate instruction files.
+That makes it practical to keep Claude Code, Codex, OpenCode, Gemini CLI, Cursor, Windsurf, GitHub Copilot, Cline, Continue, and Aider aligned instead of hand-maintaining separate instruction files.
 
 ## Commands
 
@@ -36,11 +36,12 @@ That makes it practical to keep Claude Code, Codex, Gemini CLI, Cursor, Windsurf
 |------|------|-----------------|
 | Claude Code | CLI | `AGENTS.md`, `CLAUDE.md` |
 | OpenAI Codex | CLI | `AGENTS.md` |
+| OpenCode | CLI | `AGENTS.md` |
 | Gemini CLI | CLI | `AGENTS.md`, `GEMINI.md`, `.gemini/settings.json` |
 | Aider | CLI | `AGENTS.md`, `.aider.conf.yml` |
 | Cursor | IDE | `AGENTS.md`, `.cursor/rules/karpathy-guidelines.mdc` |
 | Windsurf | IDE | `AGENTS.md`, `.windsurf/rules/karpathy-guidelines.md` |
-| GitHub Copilot | IDE | `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/karpathy-guidelines.instructions.md` |
+| GitHub Copilot / Copilot CLI | IDE / CLI | `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/karpathy-guidelines.instructions.md` |
 | Cline | VS Code extension | `AGENTS.md`, `.clinerules/karpathy-guidelines.md` |
 | Continue | VS Code extension | `AGENTS.md`, `.continue/rules/karpathy-guidelines.md` |
 
